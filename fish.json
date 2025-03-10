@@ -1,0 +1,24 @@
+{
+  "fish": [
+    {
+      "name": "Pufferfish",
+      "difficulty": 80,
+      "behaviour": "floater"
+    },
+    {
+      "name": "Salmon",
+      "difficulty": 50,
+      "behaviour": "mixed"
+    },
+    {
+      "name": "Octopus",
+      "difficulty": 95,
+      "behaviour": "sinker"
+    },
+    {
+      "name": "Lava Eel",
+      "difficulty": 90,
+      "behaviour": "mixed"
+    }
+  ]
+}
