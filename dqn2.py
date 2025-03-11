@@ -214,9 +214,9 @@ class DQNAgent:
         print(f"Model loaded from {filename}")
 
 
-def train_dqn(env, agent, n_episodes=2000, max_t=2000, eps_start=1.0, eps_end=0.01, eps_decay=0.998, save_every=100,
-              render_every=100):
-    """Train DQN agent with curriculum learning
+def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.1, eps_end=0.001,
+              eps_decay=0.999, save_every=500, render_every=1000):
+    """Train DQN agent with curriculum learning and early stopping
 
     Args:
         env: environment
@@ -245,13 +245,29 @@ def train_dqn(env, agent, n_episodes=2000, max_t=2000, eps_start=1.0, eps_end=0.
 
     # For curriculum learning
     phase = 1
-    phase_thresholds = {1: {'score': 5.0, 'episodes': 500, 'difficulty_max': 40},
-                        2: {'score': 7.0, 'episodes': 1000, 'difficulty_max': 70},
-                        3: {'score': 10.0, 'episodes': 1500, 'difficulty_max': 100}}
+    phase_thresholds = {
+        1: {'score': 5.0, 'episodes': 500, 'difficulty_max': 40},
+        2: {'score': 7.0, 'episodes': 1000, 'difficulty_max': 70},
+        3: {'score': 10.0, 'episodes': 1500, 'difficulty_max': 100}
+    }
+
+    # For early stopping
+    perfect_episodes = 0
+    required_perfect = 3  # Number of consecutive evaluation rounds with near-perfect performance
+    early_stop_threshold = 0.98  # 98% success rate
+
+    # For logging purposes
+    training_start_time = time.time()
+    last_checkpoint_time = training_start_time
+
+    print(f"Starting training with up to {n_episodes} episodes...")
+    print(
+        f"Early stopping after {required_perfect} consecutive evaluations with >{early_stop_threshold * 100}% success rate")
 
     for i_episode in range(1, n_episodes + 1):
         # Curriculum learning - select appropriate fish based on current phase
-        available_fish = [f for f in env.fish_data if f["difficulty"] <= phase_thresholds[phase]['difficulty_max']]
+        available_fish = [f for f in env.fish_data
+                          if f["difficulty"] <= phase_thresholds[phase]['difficulty_max']]
 
         if not available_fish:  # Fallback if filter gives no fish
             available_fish = env.fish_data
@@ -319,24 +335,40 @@ def train_dqn(env, agent, n_episodes=2000, max_t=2000, eps_start=1.0, eps_end=0.
         avg_score = np.mean(scores_window)
         current_episode = i_episode
 
-        if (phase < 3 and avg_score >= phase_thresholds[phase]['score'] and current_episode >= phase_thresholds[phase][
-            'episodes']):
+        if (phase < 3 and
+                avg_score >= phase_thresholds[phase]['score'] and
+                current_episode >= phase_thresholds[phase]['episodes']):
             phase += 1
             print(f"Advancing to phase {phase} - introducing more difficult fish!")
 
         # Print progress
         if i_episode % 100 == 0:
             avg_score = np.mean(scores_window)
-            print(f'Episode {i_episode}\tAverage Score: {avg_score:.2f}\tEpsilon: {eps:.4f}\tPhase: {phase}')
+            elapsed_time = time.time() - training_start_time
+            hours, remainder = divmod(elapsed_time, 3600)
+            minutes, seconds = divmod(remainder, 60)
+
+            print(f'Episode {i_episode}/{n_episodes} ({i_episode / n_episodes * 100:.1f}%) | '
+                  f'Time: {int(hours)}h {int(minutes)}m {int(seconds)}s | '
+                  f'Average Score: {avg_score:.2f} | Epsilon: {eps:.4f} | Phase: {phase}')
 
             # Calculate success rate over last 100 episodes
-            success_count = sum(1 for i in range(max(0, len(scores) - 100), len(scores)) if scores[i] > 0)
+            success_count = sum(1 for i in range(max(0, len(scores) - 100), len(scores))
+                                if scores[i] > 0)
             win_rate = success_count / min(100, len(scores)) * 100
             print(f'Recent Win Rate: {win_rate:.1f}%')
 
         # Save model periodically
         if i_episode % save_every == 0:
-            agent.save(f'models/dqn_fishing_episode_{i_episode}.pth')
+            checkpoint_path = f'models/dqn_fishing_episode_{i_episode}.pth'
+            agent.save(checkpoint_path)
+
+            checkpoint_time = time.time()
+            time_since_last = checkpoint_time - last_checkpoint_time
+            last_checkpoint_time = checkpoint_time
+
+            print(f"Saved checkpoint to {checkpoint_path}")
+            print(f"Time since last checkpoint: {time_since_last / 60:.1f} minutes")
 
             # Plot progress
             fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(20, 5))
@@ -349,8 +381,9 @@ def train_dqn(env, agent, n_episodes=2000, max_t=2000, eps_start=1.0, eps_end=0.
 
             # Plot moving average
             window_size = min(100, len(scores))
-            moving_avg = np.convolve(scores, np.ones(window_size) / window_size, mode='valid')
-            ax1.plot(np.arange(window_size - 1, len(scores)), moving_avg, 'r-')
+            if window_size > 0:
+                moving_avg = np.convolve(scores, np.ones(window_size) / window_size, mode='valid')
+                ax1.plot(np.arange(window_size - 1, len(scores)), moving_avg, 'r-')
 
             # Plot behavior success rates
             behavior_names = []
@@ -372,7 +405,9 @@ def train_dqn(env, agent, n_episodes=2000, max_t=2000, eps_start=1.0, eps_end=0.
                 # Smooth the loss curve with moving average
                 window_size = min(100, len(agent.loss_list))
                 if window_size > 0:
-                    loss_avg = np.convolve(agent.loss_list, np.ones(window_size) / window_size, mode='valid')
+                    loss_avg = np.convolve(agent.loss_list,
+                                           np.ones(window_size) / window_size,
+                                           mode='valid')
                     ax3.plot(np.arange(window_size - 1, len(agent.loss_list)), loss_avg)
                     ax3.set_ylabel('Loss')
                     ax3.set_xlabel('Training Steps (x{})'.format(agent.update_every))
@@ -397,10 +432,64 @@ def train_dqn(env, agent, n_episodes=2000, max_t=2000, eps_start=1.0, eps_end=0.
                     print(f"Difficulty {diff}: {stats['success']}/{stats['attempts']} "
                           f"({stats['success'] / stats['attempts'] * 100:.1f}%)")
 
+            # Evaluation for early stopping
+            print("\nRunning evaluation for early stopping check...")
+            env.render_mode = None  # Ensure no rendering during evaluation
+            eval_success_count = 0
+            eval_episodes = 20
+
+            for _ in range(eval_episodes):
+                # Select random fish for evaluation
+                fish_name = random.choice(env.get_available_fish())
+                env.fish_name = fish_name
+                state = env.reset()
+                done = False
+
+                for _ in range(max_t):
+                    action = agent.act(state, eps=0.0)  # No exploration during evaluation
+                    next_state, reward, done, info = env.step(action)
+                    state = next_state
+
+                    if done:
+                        if env.distanceFromCatching >= 1.0:  # Success
+                            eval_success_count += 1
+                        break
+
+            eval_success_rate = eval_success_count / eval_episodes
+            print(f"Evaluation success rate: {eval_success_rate * 100:.1f}% ({eval_success_count}/{eval_episodes})")
+
+            # Check for early stopping
+            if eval_success_rate >= early_stop_threshold:
+                perfect_episodes += 1
+                print(f"Perfect evaluation round {perfect_episodes}/{required_perfect}")
+                if perfect_episodes >= required_perfect:
+                    print(f"\n*** EARLY STOPPING at episode {i_episode} ***")
+                    print(
+                        f"Achieved {required_perfect} consecutive evaluations with >{early_stop_threshold * 100}% success rate")
+                    # Save final model before stopping
+                    agent.save('models/dqn_fishing_final.pth')
+                    break
+            else:
+                perfect_episodes = 0
+                print("Resetting perfect episode counter - continuing training")
+
+            # Restore render mode
+            env.render_mode = render_mode_backup
+
     # Save final model
     agent.save('models/dqn_fishing_final.pth')
-    return scores
 
+    # Final training stats
+    total_training_time = time.time() - training_start_time
+    hours, remainder = divmod(total_training_time, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    print(f"\nTraining complete!")
+    print(f"Total episodes: {i_episode}")
+    print(f"Total training time: {int(hours)}h {int(minutes)}m {int(seconds)}s")
+    print(f"Final win rate (last 100 episodes): {win_rate:.1f}%")
+
+    return scores
 
 def evaluate_agent(env, agent, n_episodes=20, render=True):
     """Evaluate trained agent performance"""
@@ -496,10 +585,17 @@ if __name__ == "__main__":
     train_new_model = True  # Set to False to load a saved model
 
     if train_new_model:
-        scores = train_dqn(env=env, agent=agent, n_episodes=5000,  # More episodes for better learning
-                           max_t=1000, eps_start=1.0, eps_end=0.01, eps_decay=0.998,
-                           # Slower decay for better exploration
-                           save_every=100, render_every=200)
+        scores = train_dqn(
+    env=env,
+    agent=agent,
+    n_episodes=10000,           # Large enough for overnight
+    max_t=2000,                 # Increased time limit
+    eps_start=0.1,              # Start with some exploration
+    eps_end=0.001,              # Lower final exploration
+    eps_decay=0.999,            # Very slow decay
+    save_every=500,             # Save checkpoints regularly
+    render_every=1000           # Occasional visual check
+)
         agent.save('models/dqn_fishing_final.pth')
     else:
         # Load pre-trained model
