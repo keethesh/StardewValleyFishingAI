@@ -582,7 +582,7 @@ if __name__ == "__main__":
         action_dim=2, hidden_sizes=[128, 128, 64], learning_rate=3e-4, gamma=0.99, tau=5e-3, buffer_size=100000,
         batch_size=128)
     # Train or load model
-    train_new_model = True  # Set to False to load a saved model
+    train_new_model = False  # Set to False to load a saved model
 
     if train_new_model:
         scores = train_dqn(
@@ -621,7 +621,7 @@ if __name__ == "__main__":
             # Find fish details
             fish_detail = next((f for f in env.fish_data if f["name"] == fish_name), None)
             if fish_detail:
-                behavior = fish_detail.get("behaviour", "unknown")
+                behavior = fish_detail.get("behaviour", "mixed")
                 difficulty = fish_detail.get("difficulty", 0)
                 print(f"{i}: {fish_name} (Behavior: {behavior}, Difficulty: {difficulty})")
             else:
