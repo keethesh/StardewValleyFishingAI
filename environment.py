@@ -17,8 +17,7 @@ class FishingMinigameEnv:
     ACTION_PRESS = 1
 
     # Behavior type mapping
-    BEHAVIOR_TYPES = {
-        "mixed": 0,  # Default mixed behavior
+    BEHAVIOR_TYPES = {"mixed": 0,  # Default mixed behavior
         "dart": 1,  # Darting movement with sudden direction changes
         "smooth": 2,  # Mostly static with occasional movement
         "sinker": 3,  # Tends to sink
@@ -122,6 +121,9 @@ class FishingMinigameEnv:
 
     def reset(self):
         """Reset the environment to initial state and return observation."""
+        self.current_timestep = 0
+        self.max_timesteps = 2000  # Match with max_t
+
         # Select a fish
         self.current_fish = self.select_fish(self.fish_name)
 
@@ -163,6 +165,7 @@ class FishingMinigameEnv:
 
     def _get_observation(self):
         """Convert game state to ML-friendly observation vector."""
+        # Add normalized time step to observation
         obs = np.array([self.bobberPosition / self.track_height,  # normalized fish position
                         self.bobberSpeed / 10.0,  # normalized fish speed
                         self.bobberBarPos / self.track_height,  # normalized bar position
@@ -173,17 +176,12 @@ class FishingMinigameEnv:
                         self.fishSize / self.maxFishSize,  # normalized fish size
                         self.difficulty / 100.0,  # normalized difficulty
                         float(self.motionType) / 4.0,  # normalized motion type
+                        self.current_timestep / self.max_timesteps,  # normalized time progress
         ], dtype=np.float32)
 
         return obs
 
     def step(self, action):
-        """
-        Take an action in the environment and return (obs, reward, done, info).
-
-        Args:
-            action: 0 for no press, 1 for press
-        """
         # Save previous state for reward calculation
         prev_distance = self.distanceFromCatching
 
@@ -193,23 +191,31 @@ class FishingMinigameEnv:
         # Update the environment
         self._update_game_logic(16, button_pressed)  # 16ms timestep (~60 FPS)
 
+        # Increment timestep counter
+        self.current_timestep += 1
+
         # Calculate reward
         reward = self._calculate_reward(prev_distance)
         self.episode_reward += reward
         self.episode_length += 1
 
         # Check for episode termination
-        done = self.handledFishResult
+        done = self.handledFishResult or (self.current_timestep >= self.max_timesteps)
         self.done = done
+
+        # If timeout, set handledFishResult to true to indicate failure
+        if self.current_timestep >= self.max_timesteps and not self.handledFishResult:
+            self.handledFishResult = True
+            self.distanceFromCatching = 0.0  # Ensure it's treated as a failure
 
         # Get new observation
         obs = self._get_observation()
 
         # Additional info for debugging and analysis
         info = {"fish_name": self.current_fish["name"], "fish_difficulty": self.difficulty,
-            "fish_behaviour": self.current_fish["behaviour"], "fish_size": self.fishSize,
-            "distance_from_catching": self.distanceFromCatching, "bobber_in_bar": self.bobberInBar,
-            "episode_length": self.episode_length, "episode_reward": self.episode_reward, }
+                "fish_behaviour": self.current_fish["behaviour"], "fish_size": self.fishSize,
+                "distance_from_catching": self.distanceFromCatching, "bobber_in_bar": self.bobberInBar,
+                "episode_length": self.episode_length, "episode_reward": self.episode_reward, }
 
         # Render if needed
         if self.render_mode == "human":
@@ -229,17 +235,22 @@ class FishingMinigameEnv:
         # Penalty for extreme movements
         movement_penalty = -0.01 * abs(self.bobberBarSpeed)
 
+        # NEW: Time efficiency penalty - encourages faster catches
+        time_penalty = -0.01  # Small constant penalty per timestep
+
         # Scale rewards based on difficulty
         difficulty_factor = self.difficulty / 50.0  # Higher difficulty = higher rewards
 
         # Terminal rewards
         if self.handledFishResult:
             if self.distanceFromCatching >= 1.0:  # Success
-                return 10.0 * difficulty_factor + (self.fishSize / self.maxFishSize) * 10.0
+                # Bonus for faster catches (scaled by remaining time)
+                time_bonus = 5.0 * (1.0 - (self.current_timestep / self.max_timesteps))
+                return (10.0 * difficulty_factor + (self.fishSize / self.maxFishSize) * 10.0 + time_bonus)
             else:  # Failure
                 return -5.0
 
-        return (progress_reward + in_bar_reward + movement_penalty) * difficulty_factor
+        return (progress_reward + in_bar_reward + movement_penalty + time_penalty) * difficulty_factor
 
     def _update_game_logic(self, time_elapsed, button_pressed):
         """Update game state based on elapsed time and inputs."""
@@ -250,7 +261,7 @@ class FishingMinigameEnv:
             bobberPos = self.bobberPosition
             num2 = min(99.0, self.difficulty + self.np_random.randint(10, 45)) / 100.0
             self.bobberTargetPosition = self.bobberPosition + self.np_random.randint(int(max(-bobberPos, -num1)),
-                int(num1)) * num2
+                                                                                     int(num1)) * num2
 
         # Floater/sinker adjustments
         if self.motionType == 4:  # Floater
@@ -261,7 +272,7 @@ class FishingMinigameEnv:
         # Move bobber towards target
         if abs(self.bobberPosition - self.bobberTargetPosition) > 3.0 and self.bobberTargetPosition != -1.0:
             self.bobberAcceleration = ((self.bobberTargetPosition - self.bobberPosition) / (
-                        self.np_random.randint(10, 30) + (100.0 - min(100.0, self.difficulty))))
+                    self.np_random.randint(10, 30) + (100.0 - min(100.0, self.difficulty))))
             self.bobberSpeed += (self.bobberAcceleration - self.bobberSpeed) / 5.0
         else:
             # If no target, set a random one based on difficulty
@@ -398,10 +409,10 @@ def create_default_fish_file():
     """Create a default fish.json file if it doesn't exist."""
     if not os.path.exists("fish.json"):
         default_fish = {"fish": [{"name": "Pufferfish", "difficulty": 80, "behaviour": "floater"},
-            {"name": "Salmon", "difficulty": 50, "behaviour": "mixed"},
-            {"name": "Octopus", "difficulty": 95, "behaviour": "sinker"},
-            {"name": "Trout", "difficulty": 30, "behaviour": "mixed"},
-            {"name": "Shark", "difficulty": 90, "behaviour": "dart"}]}
+                                 {"name": "Salmon", "difficulty": 50, "behaviour": "mixed"},
+                                 {"name": "Octopus", "difficulty": 95, "behaviour": "sinker"},
+                                 {"name": "Trout", "difficulty": 30, "behaviour": "mixed"},
+                                 {"name": "Shark", "difficulty": 90, "behaviour": "dart"}]}
 
         try:
             with open("fish.json", "w") as f:
@@ -451,7 +462,7 @@ def collect_training_data(episodes=100, max_steps=1000, render=True):
 
         # Create episode data dictionary
         episode_data = {"fish_name": fish_name, "observations": np.array(observations), "actions": np.array(actions),
-            "rewards": np.array(rewards), "total_reward": sum(rewards), "length": len(rewards)}
+                        "rewards": np.array(rewards), "total_reward": sum(rewards), "length": len(rewards)}
         all_data.append(episode_data)
 
         print(f"Episode {episode + 1}/{episodes}, Fish: {fish_name}, "

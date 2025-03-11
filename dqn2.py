@@ -196,8 +196,8 @@ class DQNAgent:
     def save(self, filename):
         """Save trained model"""
         torch.save({'local_state_dict': self.qnetwork_local.state_dict(),
-            'target_state_dict': self.qnetwork_target.state_dict(), 'optimizer_state_dict': self.optimizer.state_dict(),
-            'loss_list': self.loss_list}, filename)
+                    'target_state_dict': self.qnetwork_target.state_dict(),
+                    'optimizer_state_dict': self.optimizer.state_dict(), 'loss_list': self.loss_list}, filename)
 
     def load(self, filename):
         """Load trained model"""
@@ -214,7 +214,7 @@ class DQNAgent:
         print(f"Model loaded from {filename}")
 
 
-def train_dqn(env, agent, n_episodes=2000, max_t=1000, eps_start=1.0, eps_end=0.01, eps_decay=0.998, save_every=100,
+def train_dqn(env, agent, n_episodes=2000, max_t=2000, eps_start=1.0, eps_end=0.01, eps_decay=0.998, save_every=100,
               render_every=100):
     """Train DQN agent with curriculum learning
 
@@ -246,8 +246,8 @@ def train_dqn(env, agent, n_episodes=2000, max_t=1000, eps_start=1.0, eps_end=0.
     # For curriculum learning
     phase = 1
     phase_thresholds = {1: {'score': 5.0, 'episodes': 500, 'difficulty_max': 40},
-        2: {'score': 7.0, 'episodes': 1000, 'difficulty_max': 70},
-        3: {'score': 10.0, 'episodes': 1500, 'difficulty_max': 100}}
+                        2: {'score': 7.0, 'episodes': 1000, 'difficulty_max': 70},
+                        3: {'score': 10.0, 'episodes': 1500, 'difficulty_max': 100}}
 
     for i_episode in range(1, n_episodes + 1):
         # Curriculum learning - select appropriate fish based on current phase
@@ -488,24 +488,18 @@ if __name__ == "__main__":
     # Create environment and agent with optimized parameters
     env = FishingMinigameEnv(render_mode="human")
 
-    agent = DQNAgent(state_dim=10,  # Match observation space
-        action_dim=2,  # Press/no press
-        hidden_sizes=[128, 128, 64],  # Larger network architecture
-        learning_rate=3e-4,  # Optimized learning rate
-        gamma=0.99,  # High discount for long-term rewards
-        tau=5e-3,  # Faster target updates
-        buffer_size=100000,  # Large experience buffer
-        batch_size=128,  # Larger batches for stable learning
-        update_every=4  # Learn every 4 steps
-    )
-
+    # Update the DQN agent to accommodate the new state dimension
+    agent = DQNAgent(state_dim=11,  # Updated from 10 to 11 for time dimension
+        action_dim=2, hidden_sizes=[128, 128, 64], learning_rate=3e-4, gamma=0.99, tau=5e-3, buffer_size=100000,
+        batch_size=128)
     # Train or load model
     train_new_model = True  # Set to False to load a saved model
 
     if train_new_model:
         scores = train_dqn(env=env, agent=agent, n_episodes=5000,  # More episodes for better learning
-            max_t=1000, eps_start=1.0, eps_end=0.01, eps_decay=0.998,  # Slower decay for better exploration
-            save_every=100, render_every=200)
+                           max_t=1000, eps_start=1.0, eps_end=0.01, eps_decay=0.998,
+                           # Slower decay for better exploration
+                           save_every=100, render_every=200)
         agent.save('models/dqn_fishing_final.pth')
     else:
         # Load pre-trained model
