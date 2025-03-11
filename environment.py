@@ -1,11 +1,9 @@
-import tkinter as tk
-import math
-import random
-import numpy as np
 import json
 import os
-from typing import Tuple, Dict, Optional, List
 import time
+import tkinter as tk
+
+import numpy as np
 
 
 class FishingMinigameEnv:
@@ -20,9 +18,9 @@ class FishingMinigameEnv:
 
     # Behavior type mapping
     BEHAVIOR_TYPES = {
-        "mixed": 0,   # Default mixed behavior
-        "dart": 1,    # Darting movement with sudden direction changes
-        "static": 2,  # Mostly static with occasional movement
+        "mixed": 0,  # Default mixed behavior
+        "dart": 1,  # Darting movement with sudden direction changes
+        "smooth": 2,  # Mostly static with occasional movement
         "sinker": 3,  # Tends to sink
         "floater": 4  # Tends to float
     }
@@ -63,14 +61,11 @@ class FishingMinigameEnv:
         """Load fish data from fish.json file."""
         try:
             with open("fish.json", "r") as f:
-                data = json.load(f)
-                return data.get("fish", [])
+                return json.load(f)
         except (FileNotFoundError, json.JSONDecodeError) as e:
             print(f"Error loading fish.json: {e}")
             # Provide default fish data if file not found or invalid
-            return [
-                {"name": "Default Fish", "difficulty": 50, "behaviour": "mixed"}
-            ]
+            return [{"name": "Default Fish", "difficulty": 50, "behaviour": "mixed"}]
 
     def select_fish(self, fish_name=None):
         """Select a fish by name or randomly."""
@@ -168,17 +163,16 @@ class FishingMinigameEnv:
 
     def _get_observation(self):
         """Convert game state to ML-friendly observation vector."""
-        obs = np.array([
-            self.bobberPosition / self.track_height,  # normalized fish position
-            self.bobberSpeed / 10.0,  # normalized fish speed
-            self.bobberBarPos / self.track_height,  # normalized bar position
-            self.bobberBarSpeed / 10.0,  # normalized bar speed
-            self.bobberBarHeight / self.track_height,  # normalized bar height
+        obs = np.array([self.bobberPosition / self.track_height,  # normalized fish position
+                        self.bobberSpeed / 10.0,  # normalized fish speed
+                        self.bobberBarPos / self.track_height,  # normalized bar position
+                        self.bobberBarSpeed / 10.0,  # normalized bar speed
+                        self.bobberBarHeight / self.track_height,  # normalized bar height
             float(self.bobberInBar),  # binary: fish in bar?
             self.distanceFromCatching,  # progress toward catching (0-1)
-            self.fishSize / self.maxFishSize,  # normalized fish size
-            self.difficulty / 100.0,  # normalized difficulty
-            float(self.motionType) / 4.0,  # normalized motion type
+                        self.fishSize / self.maxFishSize,  # normalized fish size
+                        self.difficulty / 100.0,  # normalized difficulty
+                        float(self.motionType) / 4.0,  # normalized motion type
         ], dtype=np.float32)
 
         return obs
@@ -212,16 +206,10 @@ class FishingMinigameEnv:
         obs = self._get_observation()
 
         # Additional info for debugging and analysis
-        info = {
-            "fish_name": self.current_fish["name"],
-            "fish_difficulty": self.difficulty,
-            "fish_behaviour": self.current_fish["behaviour"],
-            "fish_size": self.fishSize,
-            "distance_from_catching": self.distanceFromCatching,
-            "bobber_in_bar": self.bobberInBar,
-            "episode_length": self.episode_length,
-            "episode_reward": self.episode_reward,
-        }
+        info = {"fish_name": self.current_fish["name"], "fish_difficulty": self.difficulty,
+            "fish_behaviour": self.current_fish["behaviour"], "fish_size": self.fishSize,
+            "distance_from_catching": self.distanceFromCatching, "bobber_in_bar": self.bobberInBar,
+            "episode_length": self.episode_length, "episode_reward": self.episode_reward, }
 
         # Render if needed
         if self.render_mode == "human":
@@ -256,14 +244,13 @@ class FishingMinigameEnv:
     def _update_game_logic(self, time_elapsed, button_pressed):
         """Update game state based on elapsed time and inputs."""
         # Attempt to set a new target occasionally
-        if (self.np_random.random() < (self.difficulty * (20.0 if self.motionType == 2 else 1.0)) / 4000.0
-                and (self.motionType != 2 or self.bobberTargetPosition == -1.0)):
+        if (self.np_random.random() < (self.difficulty * (20.0 if self.motionType == 2 else 1.0)) / 4000.0 and (
+                self.motionType != 2 or self.bobberTargetPosition == -1.0)):
             num1 = 548.0 - self.bobberPosition
             bobberPos = self.bobberPosition
             num2 = min(99.0, self.difficulty + self.np_random.randint(10, 45)) / 100.0
-            self.bobberTargetPosition = self.bobberPosition + self.np_random.randint(
-                int(max(-bobberPos, -num1)), int(num1)
-            ) * num2
+            self.bobberTargetPosition = self.bobberPosition + self.np_random.randint(int(max(-bobberPos, -num1)),
+                int(num1)) * num2
 
         # Floater/sinker adjustments
         if self.motionType == 4:  # Floater
@@ -273,10 +260,8 @@ class FishingMinigameEnv:
 
         # Move bobber towards target
         if abs(self.bobberPosition - self.bobberTargetPosition) > 3.0 and self.bobberTargetPosition != -1.0:
-            self.bobberAcceleration = (
-                    (self.bobberTargetPosition - self.bobberPosition) /
-                    (self.np_random.randint(10, 30) + (100.0 - min(100.0, self.difficulty)))
-            )
+            self.bobberAcceleration = ((self.bobberTargetPosition - self.bobberPosition) / (
+                        self.np_random.randint(10, 30) + (100.0 - min(100.0, self.difficulty))))
             self.bobberSpeed += (self.bobberAcceleration - self.bobberSpeed) / 5.0
         else:
             # If no target, set a random one based on difficulty
@@ -284,16 +269,13 @@ class FishingMinigameEnv:
                 self.bobberTargetPosition = -1.0
             else:
                 self.bobberTargetPosition = self.bobberPosition + (
-                    self.np_random.randint(-100, -51) if self.np_random.random() < 0.5
-                    else self.np_random.randint(50, 101)
-                )
+                    self.np_random.randint(-100, -51) if self.np_random.random() < 0.5 else self.np_random.randint(50,
+                                                                                                                   101))
 
         if self.motionType == 1 and self.np_random.random() < self.difficulty / 1000.0:
-            self.bobberTargetPosition = self.bobberPosition + (
-                self.np_random.randint(-100 - int(self.difficulty) * 2, -51)
-                if self.np_random.random() < 0.5 else
-                self.np_random.randint(50, 101 + int(self.difficulty) * 2)
-            )
+            self.bobberTargetPosition = self.bobberPosition + (self.np_random.randint(-100 - int(self.difficulty) * 2,
+                                                                                      -51) if self.np_random.random() < 0.5 else self.np_random.randint(
+                50, 101 + int(self.difficulty) * 2))
 
         # Clamp bobber target
         self.bobberTargetPosition = max(-1.0, min(self.bobberTargetPosition, 548.0))
@@ -368,16 +350,15 @@ class FishingMinigameEnv:
         bar_x2 = 80
         bar_y1 = self.bobberBarPos
         bar_y2 = self.bobberBarPos + self.bobberBarHeight
-        self.canvas.create_rectangle(bar_x1, bar_y1, bar_x2, bar_y2,
-                                    fill="green" if self.bobberInBar else "orange", outline="black")
+        self.canvas.create_rectangle(bar_x1, bar_y1, bar_x2, bar_y2, fill="green" if self.bobberInBar else "orange",
+                                     outline="black")
 
         # Draw fish (centered at middle of track)
         fish_x = self.track_width // 2
         fish_radius = 10
         fish_y = self.bobberPosition
-        self.canvas.create_oval(fish_x - fish_radius, fish_y - fish_radius,
-                              fish_x + fish_radius, fish_y + fish_radius,
-                              fill="red", outline="black")
+        self.canvas.create_oval(fish_x - fish_radius, fish_y - fish_radius, fish_x + fish_radius, fish_y + fish_radius,
+                                fill="red", outline="black")
 
         # Draw progress bar
         progress_width = 10
@@ -385,7 +366,7 @@ class FishingMinigameEnv:
         progress_height = int(self.track_height * self.distanceFromCatching)
         progress_y = self.track_height - progress_height
         self.canvas.create_rectangle(progress_x, progress_y, progress_x + progress_width, self.track_height,
-                                    fill="blue", outline="black")
+                                     fill="blue", outline="black")
 
         # Display fish info
         self.canvas.create_text(50, 10, text=f"Fish: {self.current_fish['name']}", fill="black")
@@ -416,35 +397,11 @@ class FishingMinigameEnv:
 def create_default_fish_file():
     """Create a default fish.json file if it doesn't exist."""
     if not os.path.exists("fish.json"):
-        default_fish = {
-            "fish": [
-                {
-                    "name": "Pufferfish",
-                    "difficulty": 80,
-                    "behaviour": "floater"
-                },
-                {
-                    "name": "Salmon",
-                    "difficulty": 50,
-                    "behaviour": "mixed"
-                },
-                {
-                    "name": "Octopus",
-                    "difficulty": 95,
-                    "behaviour": "sinker"
-                },
-                {
-                    "name": "Trout",
-                    "difficulty": 30,
-                    "behaviour": "mixed"
-                },
-                {
-                    "name": "Shark",
-                    "difficulty": 90,
-                    "behaviour": "dart"
-                }
-            ]
-        }
+        default_fish = {"fish": [{"name": "Pufferfish", "difficulty": 80, "behaviour": "floater"},
+            {"name": "Salmon", "difficulty": 50, "behaviour": "mixed"},
+            {"name": "Octopus", "difficulty": 95, "behaviour": "sinker"},
+            {"name": "Trout", "difficulty": 30, "behaviour": "mixed"},
+            {"name": "Shark", "difficulty": 90, "behaviour": "dart"}]}
 
         try:
             with open("fish.json", "w") as f:
@@ -493,17 +450,11 @@ def collect_training_data(episodes=100, max_steps=1000, render=True):
                 time.sleep(0.01)  # Slow down for visualization
 
         # Create episode data dictionary
-        episode_data = {
-            "fish_name": fish_name,
-            "observations": np.array(observations),
-            "actions": np.array(actions),
-            "rewards": np.array(rewards),
-            "total_reward": sum(rewards),
-            "length": len(rewards)
-        }
+        episode_data = {"fish_name": fish_name, "observations": np.array(observations), "actions": np.array(actions),
+            "rewards": np.array(rewards), "total_reward": sum(rewards), "length": len(rewards)}
         all_data.append(episode_data)
 
-        print(f"Episode {episode+1}/{episodes}, Fish: {fish_name}, "
+        print(f"Episode {episode + 1}/{episodes}, Fish: {fish_name}, "
               f"Reward: {episode_data['total_reward']:.2f}, Steps: {step}")
 
     env.close()
@@ -520,6 +471,7 @@ if __name__ == "__main__":
     # Print available fish
     print("Available fish:", env.get_available_fish())
 
+
     # Add reset key binding
     def on_reset(event):
         if env.done and event.keysym == 'r':
@@ -527,6 +479,7 @@ if __name__ == "__main__":
             # Choose a random fish for variety
             env.fish_name = env.np_random.choice(env.get_available_fish()) if env.fish_data else None
             env.reset()
+
 
     env.root.bind('<KeyPress-r>', on_reset)
 
