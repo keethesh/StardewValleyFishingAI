@@ -20,53 +20,194 @@ print(f"Using device: {device}")
 Experience = namedtuple('Experience', ('state', 'action', 'reward', 'next_state', 'done'))
 
 
-class ReplayBuffer:
-    """Experience replay buffer to store and sample transitions"""
+class SumTree:
+    """Sum tree data structure for prioritized replay buffer"""
+
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.tree = np.zeros(2 * capacity - 1)
+        self.data = np.zeros(capacity, dtype=object)
+        self.write = 0
+        self.n_entries = 0
+
+    def _propagate(self, idx, change):
+        """Update tree with priority change"""
+        parent = (idx - 1) // 2
+        self.tree[parent] += change
+        if parent != 0:
+            self._propagate(parent, change)
+
+    def _retrieve(self, idx, s):
+        """Find sample on leaf node"""
+        left = 2 * idx + 1
+        right = left + 1
+
+        if left >= len(self.tree):
+            return idx
+
+        if s <= self.tree[left]:
+            return self._retrieve(left, s)
+        else:
+            return self._retrieve(right, s - self.tree[left])
+
+    def total(self):
+        """Return sum of all priorities"""
+        return self.tree[0]
+
+    def add(self, priority, data):
+        """Store priority and sample"""
+        idx = self.write + self.capacity - 1
+        self.data[self.write] = data
+        self.update(idx, priority)
+
+        self.write += 1
+        if self.write >= self.capacity:
+            self.write = 0
+
+        if self.n_entries < self.capacity:
+            self.n_entries += 1
+
+    def update(self, idx, priority):
+        """Update priority"""
+        change = priority - self.tree[idx]
+        self.tree[idx] = priority
+        self._propagate(idx, change)
+
+    def get(self, s):
+        """Get priority and sample"""
+        idx = self._retrieve(0, s)
+        data_idx = idx - self.capacity + 1
+        return (idx, self.tree[idx], self.data[data_idx])
+
+
+class PrioritizedReplayBuffer:
+    """Prioritized Experience Replay buffer with optimized tensor operations"""
+
+    epsilon = 1e-5  # Small constant to avoid zero priority
+    alpha = 0.6  # Priority exponent
+    beta = 0.4  # Importance sampling weight
+    beta_increment = 0.001  # Annealing rate
+    abs_err_upper = 1.0  # Clipped abs error
 
     def __init__(self, capacity=100000):
-        self.buffer = deque(maxlen=capacity)
+        self.tree = SumTree(capacity)
+        self.capacity = capacity
+        self.device = device
+        self.use_pinned_memory = torch.cuda.is_available()
 
     def add(self, state, action, reward, next_state, done):
-        """Add experience to buffer"""
+        """Add experience to buffer with maximum priority"""
         experience = Experience(state, action, reward, next_state, done)
-        self.buffer.append(experience)
+        max_priority = np.max(self.tree.tree[-self.tree.capacity:])
+        if max_priority == 0:
+            max_priority = self.abs_err_upper
+        self.tree.add(max_priority, experience)
 
     def sample(self, batch_size):
-        """Randomly sample a batch of experiences"""
-        experiences = random.sample(self.buffer, k=batch_size)
+        """Sample a batch of experiences with priorities"""
+        experiences = []
+        indices = []
+        priorities = []
 
-        # Convert to tensors for batch processing
-        states = torch.tensor(np.vstack([e.state for e in experiences]), dtype=torch.float32).to(device)
-        actions = torch.tensor(np.vstack([e.action for e in experiences]), dtype=torch.long).to(device)
-        rewards = torch.tensor(np.vstack([e.reward for e in experiences]), dtype=torch.float32).to(device)
-        next_states = torch.tensor(np.vstack([e.next_state for e in experiences]), dtype=torch.float32).to(device)
-        dones = torch.tensor(np.vstack([e.done for e in experiences]).astype(np.uint8), dtype=torch.float32).to(device)
+        segment = self.tree.total() / batch_size
 
-        return states, actions, rewards, next_states, dones
+        # Anneal beta
+        self.beta = np.min([1.0, self.beta + self.beta_increment])
+
+        for i in range(batch_size):
+            a = segment * i
+            b = segment * (i + 1)
+            s = random.uniform(a, b)
+            idx, priority, data = self.tree.get(s)
+            experiences.append(data)
+            indices.append(idx)
+            priorities.append(priority)
+
+        # Pre-allocate arrays for better performance
+        state_dim = experiences[0].state.shape[0]
+        states = np.zeros((batch_size, state_dim), dtype=np.float32)
+        actions = np.zeros((batch_size, 1), dtype=np.int64)
+        rewards = np.zeros((batch_size, 1), dtype=np.float32)
+        next_states = np.zeros((batch_size, state_dim), dtype=np.float32)
+        dones = np.zeros((batch_size, 1), dtype=np.float32)
+
+        # Fill arrays
+        for idx, e in enumerate(experiences):
+            states[idx] = e.state
+            actions[idx] = e.action
+            rewards[idx] = e.reward
+            next_states[idx] = e.next_state
+            dones[idx] = e.done
+
+        # Convert to tensors with optimized transfer
+        if self.use_pinned_memory:
+            states = torch.from_numpy(states).pin_memory().to(device, non_blocking=True)
+            actions = torch.from_numpy(actions).pin_memory().to(device, non_blocking=True)
+            rewards = torch.from_numpy(rewards).pin_memory().to(device, non_blocking=True)
+            next_states = torch.from_numpy(next_states).pin_memory().to(device, non_blocking=True)
+            dones = torch.from_numpy(dones).pin_memory().to(device, non_blocking=True)
+        else:
+            states = torch.from_numpy(states).to(device)
+            actions = torch.from_numpy(actions).to(device)
+            rewards = torch.from_numpy(rewards).to(device)
+            next_states = torch.from_numpy(next_states).to(device)
+            dones = torch.from_numpy(dones).to(device)
+
+        # Calculate importance sampling weights
+        sampling_probabilities = np.array(priorities) / self.tree.total()
+        is_weights = np.power(self.tree.n_entries * sampling_probabilities, -self.beta)
+        is_weights /= is_weights.max()
+        is_weights = torch.from_numpy(is_weights.astype(np.float32)).unsqueeze(1).to(device)
+
+        return states, actions, rewards, next_states, dones, indices, is_weights
+
+    def update_priorities(self, indices, errors):
+        """Update priorities based on TD errors"""
+        for idx, error in zip(indices, errors):
+            priority = (abs(error) + self.epsilon) ** self.alpha
+            priority = min(priority, self.abs_err_upper)
+            self.tree.update(idx, priority)
 
     def __len__(self):
         """Return current size of buffer"""
-        return len(self.buffer)
+        return self.tree.n_entries
 
 
-class DQN(nn.Module):
-    """Enhanced Deep Q-Network model"""
+class DuelingDQN(nn.Module):
+    """Dueling Deep Q-Network with Layer Normalization"""
 
     def __init__(self, state_dim=10, action_dim=2, hidden_sizes=[128, 128, 64]):
-        super(DQN, self).__init__()
+        super(DuelingDQN, self).__init__()
 
-        # Enhanced neural network architecture
-        layers = []
+        self.action_dim = action_dim
+
+        # Shared feature extraction layers with Layer Normalization
+        feature_layers = []
         input_size = state_dim
 
         for hidden_size in hidden_sizes:
-            layers.append(nn.Linear(input_size, hidden_size))
-            layers.append(nn.ReLU())
+            feature_layers.append(nn.Linear(input_size, hidden_size))
+            feature_layers.append(nn.LayerNorm(hidden_size))
+            feature_layers.append(nn.ReLU())
             input_size = hidden_size
 
-        layers.append(nn.Linear(input_size, action_dim))
+        self.feature_layer = nn.Sequential(*feature_layers)
 
-        self.network = nn.Sequential(*layers)
+        # Value stream - estimates V(s)
+        self.value_stream = nn.Sequential(
+            nn.Linear(input_size, 64),
+            nn.LayerNorm(64),
+            nn.ReLU(),
+            nn.Linear(64, 1)
+        )
+
+        # Advantage stream - estimates A(s,a)
+        self.advantage_stream = nn.Sequential(
+            nn.Linear(input_size, 64),
+            nn.LayerNorm(64),
+            nn.ReLU(),
+            nn.Linear(64, action_dim)
+        )
 
         # Initialize weights
         self.apply(self._init_weights)
@@ -79,50 +220,92 @@ class DQN(nn.Module):
                 module.bias.data.fill_(0.01)
 
     def forward(self, x):
-        """Forward pass through the network"""
-        return self.network(x)
+        """Forward pass through the dueling architecture
+        Q(s,a) = V(s) + (A(s,a) - mean(A(s,a)))
+        """
+        features = self.feature_layer(x)
+
+        value = self.value_stream(features)
+        advantages = self.advantage_stream(features)
+
+        # Combine value and advantages using the dueling architecture formula
+        # Subtract mean advantage to ensure identifiability
+        q_values = value + (advantages - advantages.mean(dim=1, keepdim=True))
+
+        return q_values
 
 
 class DQNAgent:
-    """Agent implementing Double DQN algorithm with optimizations"""
+    """Agent implementing Double DQN with Dueling architecture, Prioritized Replay, and N-step returns"""
 
     def __init__(self, state_dim=10, action_dim=2, hidden_sizes=[128, 128, 64], learning_rate=3e-4, gamma=0.99,
-                 tau=5e-3, buffer_size=100000, batch_size=128, update_every=4):
+                 buffer_size=100000, batch_size=128, update_every=4, n_step=3, target_update_freq=1000):
         """Initialize agent parameters and build models"""
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.batch_size = batch_size
         self.gamma = gamma  # discount factor
-        self.tau = tau  # soft update parameter
+        self.n_step = n_step  # N-step returns
+        self.target_update_freq = target_update_freq  # Hard update frequency
 
-        # Q-Networks with enhanced architecture
-        self.qnetwork_local = DQN(state_dim, action_dim, hidden_sizes).to(device)
-        self.qnetwork_target = DQN(state_dim, action_dim, hidden_sizes).to(device)
+        # Q-Networks with Dueling architecture
+        self.qnetwork_local = DuelingDQN(state_dim, action_dim, hidden_sizes).to(device)
+        self.qnetwork_target = DuelingDQN(state_dim, action_dim, hidden_sizes).to(device)
+        self.qnetwork_target.load_state_dict(self.qnetwork_local.state_dict())
+        self.qnetwork_target.eval()  # Target network always in eval mode
+
         self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=learning_rate)
+        self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=10000, eta_min=1e-5)
 
-        # Larger replay buffer
-        self.memory = ReplayBuffer(buffer_size)
+        # Prioritized replay buffer
+        self.memory = PrioritizedReplayBuffer(buffer_size)
+
+        # N-step buffer for multi-step returns
+        self.n_step_buffer = deque(maxlen=n_step)
 
         # Initialize time step (for updating every UPDATE_EVERY steps)
         self.t_step = 0
         self.update_every = update_every
+        self.total_steps = 0
 
         # For tracking statistics
         self.loss_list = []
 
     def step(self, state, action, reward, next_state, done):
-        """Save experience in replay memory, and use random sample to learn"""
-        # Save experience in replay memory
-        self.memory.add(state, action, reward, next_state, done)
+        """Save experience with N-step returns in replay memory, and use random sample to learn"""
+        # Add to n-step buffer
+        self.n_step_buffer.append((state, action, reward, next_state, done))
+
+        # If we have enough steps or episode ended, compute n-step return and add to memory
+        if len(self.n_step_buffer) == self.n_step or done:
+            # Compute n-step return
+            n_step_state = self.n_step_buffer[0][0]
+            n_step_action = self.n_step_buffer[0][1]
+            n_step_reward = sum([self.gamma ** i * exp[2] for i, exp in enumerate(self.n_step_buffer)])
+            n_step_next_state = self.n_step_buffer[-1][3]
+            n_step_done = self.n_step_buffer[-1][4]
+
+            # Add to memory
+            self.memory.add(n_step_state, n_step_action, n_step_reward, n_step_next_state, n_step_done)
+
+            # If done, flush remaining experiences in n-step buffer
+            if done:
+                self.n_step_buffer.clear()
 
         # Learn every UPDATE_EVERY time steps
         self.t_step = (self.t_step + 1) % self.update_every
+        self.total_steps += 1
+
         if self.t_step == 0:
             # If enough samples are available in memory, get random subset and learn
             if len(self.memory) > self.batch_size:
                 experiences = self.memory.sample(self.batch_size)
                 loss = self.learn(experiences)
                 self.loss_list.append(loss)
+
+                # Hard update target network periodically
+                if self.total_steps % self.target_update_freq == 0:
+                    self.hard_update()
 
     def act(self, state, eps=0.0):
         """Returns actions for given state as per current policy
@@ -132,10 +315,10 @@ class DQNAgent:
             eps: epsilon for epsilon-greedy action selection
         """
         state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-        self.qnetwork_local.eval()
+
+        # No need for eval/train switching - torch.no_grad() is sufficient
         with torch.no_grad():
             action_values = self.qnetwork_local(state)
-        self.qnetwork_local.train()
 
         # Epsilon-greedy action selection
         if random.random() > eps:
@@ -144,12 +327,12 @@ class DQNAgent:
             return random.choice(np.arange(self.action_dim))
 
     def learn(self, experiences):
-        """Update value parameters using batch of experience tuples with Double DQN
+        """Update value parameters using batch of experience tuples with Double DQN and Prioritized Replay
 
         Args:
-            experiences: tuple of (s, a, r, s', done) tuples
+            experiences: tuple of (s, a, r, s', done, indices, is_weights) tuples
         """
-        states, actions, rewards, next_states, dones = experiences
+        states, actions, rewards, next_states, dones, indices, is_weights = experiences
 
         # Double DQN: use local network to select actions, target network to evaluate
         with torch.no_grad():
@@ -159,14 +342,17 @@ class DQNAgent:
             # Get Q values from target model for those actions
             Q_targets_next = self.qnetwork_target(next_states).gather(1, action_indices)
 
-            # Compute Q targets for current states using Bellman equation
-            Q_targets = rewards + (self.gamma * Q_targets_next * (1 - dones))
+            # Compute Q targets for current states using Bellman equation with n-step adjustment
+            Q_targets = rewards + (self.gamma ** self.n_step * Q_targets_next * (1 - dones))
 
         # Get expected Q values from local model
         Q_expected = self.qnetwork_local(states).gather(1, actions)
 
-        # Calculate loss
-        loss = F.mse_loss(Q_expected, Q_targets)
+        # Calculate TD errors for priority updates
+        td_errors = (Q_expected - Q_targets).detach().cpu().numpy()
+
+        # Calculate weighted loss (importance sampling)
+        loss = (is_weights * F.mse_loss(Q_expected, Q_targets, reduction='none')).mean()
 
         # Minimize the loss
         self.optimizer.zero_grad()
@@ -177,21 +363,19 @@ class DQNAgent:
 
         self.optimizer.step()
 
-        # Soft update target network
-        self.soft_update(self.qnetwork_local, self.qnetwork_target)
+        # Update learning rate
+        self.scheduler.step()
+
+        # Update priorities in the replay buffer
+        self.memory.update_priorities(indices, td_errors)
 
         # Return loss value for monitoring
         return loss.item()
 
-    def soft_update(self, local_model, target_model):
-        """Soft update model parameters: θ_target = τ*θ_local + (1 - τ)*θ_target
-
-        Args:
-            local_model: PyTorch model (weights will be copied from)
-            target_model: PyTorch model (weights will be copied to)
-        """
-        for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
-            target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
+    def hard_update(self):
+        """Hard update: copy weights from local to target network"""
+        self.qnetwork_target.load_state_dict(self.qnetwork_local.state_dict())
+        print(f"Target network updated at step {self.total_steps}")
 
     def save(self, filename):
         """Save trained model"""
@@ -214,9 +398,9 @@ class DQNAgent:
         print(f"Model loaded from {filename}")
 
 
-def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.1, eps_end=0.001,
-              eps_decay=0.999, save_every=500, render_every=1000):
-    """Train DQN agent with curriculum learning and early stopping
+def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.2, eps_end=0.001,
+              save_every=500, render_every=1000):
+    """Train DQN agent with adaptive curriculum learning and improved exploration
 
     Args:
         env: environment
@@ -225,31 +409,29 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.1, eps_end=0
         max_t: maximum number of timesteps per episode
         eps_start: starting value of epsilon for epsilon-greedy action selection
         eps_end: minimum value of epsilon
-        eps_decay: multiplicative factor for decreasing epsilon
         save_every: how often to save the model (episodes)
         render_every: how often to render an episode
     """
     scores = []  # list of scores from each episode
     scores_window = deque(maxlen=100)  # last 100 scores for tracking progress
-    eps = eps_start
 
     # Create directory for saving models
     os.makedirs("models", exist_ok=True)
 
-    # Track difficulties mastered
-    difficulty_success = {}
+    # Track difficulties mastered with adaptive thresholds
+    difficulty_buckets = {
+        'easy': {'range': (0, 40), 'attempts': 0, 'success': 0, 'enabled': True},
+        'medium': {'range': (41, 70), 'attempts': 0, 'success': 0, 'enabled': False},
+        'hard': {'range': (71, 100), 'attempts': 0, 'success': 0, 'enabled': False}
+    }
 
     # For plotting
     fish_behaviors = list(env.BEHAVIOR_TYPES.keys())
     behavior_stats = {b: {"attempts": 0, "success": 0} for b in fish_behaviors}
 
-    # For curriculum learning
-    phase = 1
-    phase_thresholds = {
-        1: {'score': 5.0, 'episodes': 500, 'difficulty_max': 40},
-        2: {'score': 7.0, 'episodes': 1000, 'difficulty_max': 70},
-        3: {'score': 10.0, 'episodes': 1500, 'difficulty_max': 100}
-    }
+    # Enhanced curriculum learning with adaptive difficulty mixing
+    curriculum_threshold = 0.75  # 75% success rate to enable next difficulty
+    difficulty_mix_ratio = 0.8  # 80% current level, 20% harder when mixing
 
     # For early stopping
     perfect_episodes = 0
@@ -265,9 +447,26 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.1, eps_end=0
         f"Early stopping after {required_perfect} consecutive evaluations with >{early_stop_threshold * 100}% success rate")
 
     for i_episode in range(1, n_episodes + 1):
-        # Curriculum learning - select appropriate fish based on current phase
+        # Cosine annealing epsilon schedule (smoother decay)
+        eps = eps_end + (eps_start - eps_end) * (1 + np.cos(np.pi * i_episode / n_episodes)) / 2
+
+        # Adaptive curriculum learning - select fish based on enabled difficulty buckets
+        enabled_buckets = [b for b, info in difficulty_buckets.items() if info['enabled']]
+
+        # Mix difficulties: prefer current level but include some harder fish
+        if len(enabled_buckets) > 1 and random.random() > difficulty_mix_ratio:
+            # Sample from harder difficulties
+            bucket = enabled_buckets[-1]
+        else:
+            # Sample from current/earlier difficulties
+            bucket = random.choice(enabled_buckets[:-1] if len(enabled_buckets) > 1 else enabled_buckets)
+
+        bucket_info = difficulty_buckets[bucket]
+        min_diff, max_diff = bucket_info['range']
+
+        # Get fish in this difficulty range
         available_fish = [f for f in env.fish_data
-                          if f["difficulty"] <= phase_thresholds[phase]['difficulty_max']]
+                          if min_diff <= f["difficulty"] <= max_diff]
 
         if not available_fish:  # Fallback if filter gives no fish
             available_fish = env.fish_data
@@ -281,6 +480,13 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.1, eps_end=0
         fish_behavior = env.current_fish["behaviour"]
         fish_difficulty = env.current_fish["difficulty"]
         behavior_stats[fish_behavior]["attempts"] += 1
+
+        # Track which bucket this fish belongs to
+        for bucket_name, bucket_data in difficulty_buckets.items():
+            b_min, b_max = bucket_data['range']
+            if b_min <= fish_difficulty <= b_max:
+                bucket_data['attempts'] += 1
+                break
 
         score = 0
         render = (i_episode % render_every == 0)
@@ -300,46 +506,46 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.1, eps_end=0
             state = next_state
             score += reward
 
-            if render:
-                env.root.update()
+            if render and env.root is not None:
+                env.root.update_idletasks()  # Optimized rendering
                 time.sleep(0.01)  # slow down rendering
 
             if done:
                 if env.distanceFromCatching >= 1.0:  # Successfully caught fish
                     behavior_stats[fish_behavior]["success"] += 1
 
-                    # Track difficulty mastery
-                    difficulty_str = f"{fish_difficulty}"
-                    if difficulty_str not in difficulty_success:
-                        difficulty_success[difficulty_str] = {"attempts": 0, "success": 0}
-                    difficulty_success[difficulty_str]["attempts"] += 1
-                    difficulty_success[difficulty_str]["success"] += 1
-                else:
-                    # Track failed attempt
-                    difficulty_str = f"{fish_difficulty}"
-                    if difficulty_str not in difficulty_success:
-                        difficulty_success[difficulty_str] = {"attempts": 0, "success": 0}
-                    difficulty_success[difficulty_str]["attempts"] += 1
+                    # Track success for difficulty bucket
+                    for bucket_name, bucket_data in difficulty_buckets.items():
+                        b_min, b_max = bucket_data['range']
+                        if b_min <= fish_difficulty <= b_max:
+                            bucket_data['success'] += 1
+                            break
 
                 break
 
         # Restore render mode
         env.render_mode = render_mode_backup
 
-        # Record score and update epsilon
+        # Record score
         scores_window.append(score)
         scores.append(score)
-        eps = max(eps_end, eps_decay * eps)
 
-        # Check if we should advance curriculum phase
-        avg_score = np.mean(scores_window)
-        current_episode = i_episode
+        # Adaptive curriculum advancement - check if we should enable harder difficulties
+        if i_episode % 100 == 0 and i_episode > 100:
+            for idx, (bucket_name, bucket_data) in enumerate(difficulty_buckets.items()):
+                if bucket_data['enabled'] and bucket_data['attempts'] >= 50:
+                    success_rate = bucket_data['success'] / bucket_data['attempts']
 
-        if (phase < 3 and
-                avg_score >= phase_thresholds[phase]['score'] and
-                current_episode >= phase_thresholds[phase]['episodes']):
-            phase += 1
-            print(f"Advancing to phase {phase} - introducing more difficult fish!")
+                    # If we've mastered this level, enable the next
+                    if success_rate >= curriculum_threshold:
+                        # Find next bucket
+                        bucket_names = list(difficulty_buckets.keys())
+                        if idx < len(bucket_names) - 1:
+                            next_bucket = bucket_names[idx + 1]
+                            if not difficulty_buckets[next_bucket]['enabled']:
+                                difficulty_buckets[next_bucket]['enabled'] = True
+                                print(f"\n*** Curriculum Advanced: Enabled '{next_bucket}' difficulty "
+                                      f"(mastered '{bucket_name}' with {success_rate*100:.1f}% success) ***")
 
         # Print progress
         if i_episode % 100 == 0:
@@ -348,9 +554,10 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.1, eps_end=0
             hours, remainder = divmod(elapsed_time, 3600)
             minutes, seconds = divmod(remainder, 60)
 
+            enabled_levels = [b for b, info in difficulty_buckets.items() if info['enabled']]
             print(f'Episode {i_episode}/{n_episodes} ({i_episode / n_episodes * 100:.1f}%) | '
                   f'Time: {int(hours)}h {int(minutes)}m {int(seconds)}s | '
-                  f'Average Score: {avg_score:.2f} | Epsilon: {eps:.4f} | Phase: {phase}')
+                  f'Average Score: {avg_score:.2f} | Epsilon: {eps:.4f} | Enabled: {", ".join(enabled_levels)}')
 
             # Calculate success rate over last 100 episodes
             success_count = sum(1 for i in range(max(0, len(scores) - 100), len(scores))
@@ -425,12 +632,14 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.1, eps_end=0
                     print(f"{behavior}: {stats['success']}/{stats['attempts']} "
                           f"({stats['success'] / stats['attempts'] * 100:.1f}%)")
 
-            # Print difficulty success stats
-            print("\nDifficulty success rates:")
-            for diff, stats in sorted(difficulty_success.items()):
-                if stats["attempts"] > 0:
-                    print(f"Difficulty {diff}: {stats['success']}/{stats['attempts']} "
-                          f"({stats['success'] / stats['attempts'] * 100:.1f}%)")
+            # Print difficulty bucket success stats
+            print("\nDifficulty bucket success rates:")
+            for bucket_name, bucket_data in difficulty_buckets.items():
+                if bucket_data["attempts"] > 0:
+                    success_rate = bucket_data['success'] / bucket_data['attempts'] * 100
+                    enabled_str = "✓" if bucket_data['enabled'] else "✗"
+                    print(f"{bucket_name} ({enabled_str}): {bucket_data['success']}/{bucket_data['attempts']} "
+                          f"({success_rate:.1f}%)")
 
             # Evaluation for early stopping
             print("\nRunning evaluation for early stopping check...")
@@ -577,25 +786,34 @@ if __name__ == "__main__":
     # Create environment and agent with optimized parameters
     env = FishingMinigameEnv(render_mode="human")
 
-    # Update the DQN agent to accommodate the new state dimension
-    agent = DQNAgent(state_dim=11,  # Updated from 10 to 11 for time dimension
-        action_dim=2, hidden_sizes=[128, 128, 64], learning_rate=3e-4, gamma=0.99, tau=5e-3, buffer_size=100000,
-        batch_size=128)
+    # Create agent with all improvements: Dueling DQN, Prioritized Replay, N-step returns
+    agent = DQNAgent(
+        state_dim=11,  # Updated from 10 to 11 for time dimension
+        action_dim=2,
+        hidden_sizes=[128, 128, 64],
+        learning_rate=3e-4,
+        gamma=0.99,
+        buffer_size=100000,
+        batch_size=128,
+        update_every=4,
+        n_step=3,  # 3-step returns
+        target_update_freq=1000  # Hard update every 1000 steps
+    )
+
     # Train or load model
     train_new_model = False  # Set to False to load a saved model
 
     if train_new_model:
         scores = train_dqn(
-    env=env,
-    agent=agent,
-    n_episodes=10000,           # Large enough for overnight
-    max_t=2000,                 # Increased time limit
-    eps_start=0.1,              # Start with some exploration
-    eps_end=0.001,              # Lower final exploration
-    eps_decay=0.999,            # Very slow decay
-    save_every=500,             # Save checkpoints regularly
-    render_every=1000           # Occasional visual check
-)
+            env=env,
+            agent=agent,
+            n_episodes=10000,           # Large enough for overnight training
+            max_t=2000,                 # Maximum timesteps per episode
+            eps_start=0.2,              # Start with good exploration (cosine annealing)
+            eps_end=0.001,              # Lower final exploration
+            save_every=500,             # Save checkpoints regularly
+            render_every=1000           # Occasional visual check
+        )
         agent.save('models/dqn_fishing_final.pth')
     else:
         # Load pre-trained model
@@ -661,7 +879,8 @@ if __name__ == "__main__":
             state = next_state
             score += reward
 
-            env.root.update()
+            if env.root is not None:
+                env.root.update_idletasks()  # Optimized rendering
             time.sleep(0.016)  # ~60 FPS for smooth playback
 
         # Display result

@@ -24,7 +24,7 @@ class FishingMinigameEnv:
         "floater": 4  # Tends to float
     }
 
-    def __init__(self, render_mode="human", seed=None, fish_name=None):
+    def __init__(self, render_mode="human", seed=None, fish_name=None, normalize_obs=False):
         # Set random seed if provided
         self.np_random = np.random.RandomState(seed)
 
@@ -48,6 +48,22 @@ class FishingMinigameEnv:
         # For tracking ML training progress
         self.episode_reward = 0
         self.episode_length = 0
+
+        # Observation normalization
+        self.normalize_obs = normalize_obs
+        self.obs_mean = None
+        self.obs_std = None
+        self.obs_count = 0
+        self.obs_sum = None
+        self.obs_sum_sq = None
+
+        # Cache normalized constants for better performance
+        self._norm_constants = {
+            'height': self.track_height,
+            'max_fish_size': 20,  # Will be set in reset
+            'speed_norm': 10.0,
+            'max_timesteps': 2000
+        }
 
         # Create GUI if needed
         if render_mode == "human":
@@ -164,22 +180,52 @@ class FishingMinigameEnv:
         return self._get_observation()
 
     def _get_observation(self):
-        """Convert game state to ML-friendly observation vector."""
-        # Add normalized time step to observation
-        obs = np.array([self.bobberPosition / self.track_height,  # normalized fish position
-                        self.bobberSpeed / 10.0,  # normalized fish speed
-                        self.bobberBarPos / self.track_height,  # normalized bar position
-                        self.bobberBarSpeed / 10.0,  # normalized bar speed
-                        self.bobberBarHeight / self.track_height,  # normalized bar height
+        """Convert game state to ML-friendly observation vector with optional normalization."""
+        # Use cached constants for better performance
+        obs = np.array([
+            self.bobberPosition / self._norm_constants['height'],  # normalized fish position
+            self.bobberSpeed / self._norm_constants['speed_norm'],  # normalized fish speed
+            self.bobberBarPos / self._norm_constants['height'],  # normalized bar position
+            self.bobberBarSpeed / self._norm_constants['speed_norm'],  # normalized bar speed
+            self.bobberBarHeight / self._norm_constants['height'],  # normalized bar height
             float(self.bobberInBar),  # binary: fish in bar?
             self.distanceFromCatching,  # progress toward catching (0-1)
-                        self.fishSize / self.maxFishSize,  # normalized fish size
-                        self.difficulty / 100.0,  # normalized difficulty
-                        float(self.motionType) / 4.0,  # normalized motion type
-                        self.current_timestep / self.max_timesteps,  # normalized time progress
+            self.fishSize / self._norm_constants['max_fish_size'],  # normalized fish size
+            self.difficulty / 100.0,  # normalized difficulty
+            float(self.motionType) / 4.0,  # normalized motion type
+            self.current_timestep / self._norm_constants['max_timesteps'],  # normalized time progress
         ], dtype=np.float32)
 
+        # Apply running normalization if enabled
+        if self.normalize_obs:
+            obs = self._normalize_observation(obs)
+
         return obs
+
+    def _normalize_observation(self, obs):
+        """Apply running mean/std normalization to observations."""
+        # Initialize statistics on first call
+        if self.obs_mean is None:
+            obs_dim = obs.shape[0]
+            self.obs_mean = np.zeros(obs_dim, dtype=np.float32)
+            self.obs_std = np.ones(obs_dim, dtype=np.float32)
+            self.obs_sum = np.zeros(obs_dim, dtype=np.float32)
+            self.obs_sum_sq = np.zeros(obs_dim, dtype=np.float32)
+
+        # Update running statistics
+        self.obs_count += 1
+        self.obs_sum += obs
+        self.obs_sum_sq += obs ** 2
+
+        # Calculate running mean and std
+        self.obs_mean = self.obs_sum / self.obs_count
+        variance = (self.obs_sum_sq / self.obs_count) - (self.obs_mean ** 2)
+        self.obs_std = np.sqrt(np.maximum(variance, 1e-8))
+
+        # Normalize observation
+        normalized_obs = (obs - self.obs_mean) / (self.obs_std + 1e-8)
+
+        return normalized_obs
 
     def step(self, action):
         # Save previous state for reward calculation
@@ -217,26 +263,42 @@ class FishingMinigameEnv:
                 "distance_from_catching": self.distanceFromCatching, "bobber_in_bar": self.bobberInBar,
                 "episode_length": self.episode_length, "episode_reward": self.episode_reward, }
 
-        # Render if needed
-        if self.render_mode == "human":
+        # Render if needed (optimized)
+        if self.render_mode == "human" and self.root is not None:
             self._render_frame()
-            self.root.update()
+            self.root.update_idletasks()  # Faster than full update()
 
         return obs, reward, done, info
 
     def _calculate_reward(self, prev_distance):
-        """Calculate reward based on current state and previous state."""
+        """Calculate reward based on current state and previous state with improved shaping."""
         # Progress reward: improvement in catching progress
         progress_reward = (self.distanceFromCatching - prev_distance) * 10.0
 
         # Reward for keeping fish in bar
         in_bar_reward = 0.1 if self.bobberInBar else -0.05
 
-        # Penalty for extreme movements
-        movement_penalty = -0.01 * abs(self.bobberBarSpeed)
+        # NEW: Proximity reward - guide bar toward fish
+        bar_center = self.bobberBarPos + (self.bobberBarHeight / 2.0)
+        distance_to_fish = abs(bar_center - self.bobberPosition)
+        normalized_distance = distance_to_fish / self.track_height
+        proximity_reward = -0.02 * normalized_distance  # Closer is better
 
-        # NEW: Time efficiency penalty - encourages faster catches
-        time_penalty = -0.01  # Small constant penalty per timestep
+        # NEW: Velocity matching reward - encourage smooth control
+        # When fish is moving, try to match its velocity
+        velocity_diff = abs(self.bobberSpeed - self.bobberBarSpeed)
+        velocity_penalty = -0.005 * velocity_diff
+
+        # Penalty for extreme movements (reduced weight)
+        movement_penalty = -0.005 * abs(self.bobberBarSpeed)
+
+        # NEW: Early progress bonus - combat sparse rewards early on
+        early_bonus = 0.0
+        if self.distanceFromCatching < 0.3 and self.bobberInBar:
+            early_bonus = 0.05  # Extra encouragement in early stages
+
+        # Time efficiency penalty - encourages faster catches
+        time_penalty = -0.01
 
         # Scale rewards based on difficulty
         difficulty_factor = self.difficulty / 50.0  # Higher difficulty = higher rewards
@@ -250,7 +312,8 @@ class FishingMinigameEnv:
             else:  # Failure
                 return -5.0
 
-        return (progress_reward + in_bar_reward + movement_penalty + time_penalty) * difficulty_factor
+        return (progress_reward + in_bar_reward + proximity_reward + velocity_penalty +
+                movement_penalty + early_bonus + time_penalty) * difficulty_factor
 
     def _update_game_logic(self, time_elapsed, button_pressed):
         """Update game state based on elapsed time and inputs."""
