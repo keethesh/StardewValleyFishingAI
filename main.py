@@ -1,7 +1,9 @@
+import csv
 import os
 import random
 import time
 from collections import deque, namedtuple
+from datetime import datetime
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -18,6 +20,146 @@ print(f"Using device: {device}")
 
 # Define the experience tuple structure
 Experience = namedtuple('Experience', ('state', 'action', 'reward', 'next_state', 'done'))
+
+
+class MilestoneTracker:
+    """Track and log major training milestones for YouTube video storytelling"""
+
+    def __init__(self, log_dir="training_logs"):
+        self.log_dir = log_dir
+        os.makedirs(log_dir, exist_ok=True)
+
+        # Milestone tracking
+        self.milestones = {
+            'first_success': False,
+            'first_win_streak_3': False,
+            'first_win_streak_5': False,
+            'first_win_streak_10': False,
+            'easy_mastery_75': False,
+            'easy_mastery_90': False,
+            'medium_unlocked': False,
+            'medium_mastery_75': False,
+            'hard_unlocked': False,
+            'hard_mastery_75': False,
+            'overall_80_percent': False,
+            'overall_90_percent': False,
+        }
+
+        # Tracking variables
+        self.current_win_streak = 0
+        self.max_win_streak = 0
+        self.episode_results = []  # For CSV logging
+
+        # CSV setup
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.csv_path = os.path.join(log_dir, f"training_metrics_{timestamp}.csv")
+        self.csv_file = open(self.csv_path, 'w', newline='')
+        self.csv_writer = csv.writer(self.csv_file)
+        self.csv_writer.writerow([
+            'Episode', 'Score', 'Success', 'Fish', 'Difficulty', 'Behavior',
+            'Episode_Length', 'Epsilon', 'Win_Streak', 'Avg_Score_100',
+            'Win_Rate_100', 'Easy_Success_Rate', 'Medium_Success_Rate', 'Hard_Success_Rate'
+        ])
+
+        # Milestone log file
+        self.milestone_log_path = os.path.join(log_dir, f"milestones_{timestamp}.txt")
+        with open(self.milestone_log_path, 'w') as f:
+            f.write(f"Training Milestones Log - Started {timestamp}\n")
+            f.write("=" * 60 + "\n\n")
+
+    def check_milestone(self, name, condition, episode, message):
+        """Check and log a milestone if not already achieved"""
+        if not self.milestones.get(name, False) and condition:
+            self.milestones[name] = True
+            log_msg = f"🏆 MILESTONE at Episode {episode}: {message}"
+            print(f"\n{'='*60}")
+            print(log_msg)
+            print(f"{'='*60}\n")
+
+            # Write to milestone log
+            with open(self.milestone_log_path, 'a') as f:
+                f.write(f"Episode {episode}: {message}\n")
+
+            return True
+        return False
+
+    def update(self, episode, score, success, fish_info, epsilon, stats):
+        """Update tracking with episode results"""
+        # Update win streak
+        if success:
+            self.current_win_streak += 1
+            self.max_win_streak = max(self.max_win_streak, self.current_win_streak)
+        else:
+            self.current_win_streak = 0
+
+        # Write to CSV
+        self.csv_writer.writerow([
+            episode,
+            f"{score:.2f}",
+            1 if success else 0,
+            fish_info['name'],
+            fish_info['difficulty'],
+            fish_info['behavior'],
+            fish_info['episode_length'],
+            f"{epsilon:.4f}",
+            self.current_win_streak,
+            f"{stats['avg_score']:.2f}",
+            f"{stats['win_rate']:.1f}",
+            f"{stats['easy_success_rate']:.1f}",
+            f"{stats['medium_success_rate']:.1f}",
+            f"{stats['hard_success_rate']:.1f}",
+        ])
+
+        # Check milestones
+        if success:
+            self.check_milestone('first_success', True, episode,
+                               f"First successful catch! ({fish_info['name']})")
+
+        if self.current_win_streak == 3:
+            self.check_milestone('first_win_streak_3', True, episode,
+                               "First 3-episode win streak!")
+        elif self.current_win_streak == 5:
+            self.check_milestone('first_win_streak_5', True, episode,
+                               "First 5-episode win streak!")
+        elif self.current_win_streak == 10:
+            self.check_milestone('first_win_streak_10', True, episode,
+                               "First 10-episode win streak!")
+
+        # Difficulty mastery milestones
+        if stats['easy_success_rate'] >= 75:
+            self.check_milestone('easy_mastery_75', True, episode,
+                               f"Easy fish mastery! ({stats['easy_success_rate']:.1f}% success rate)")
+        if stats['easy_success_rate'] >= 90:
+            self.check_milestone('easy_mastery_90', True, episode,
+                               f"Easy fish excellence! ({stats['easy_success_rate']:.1f}% success rate)")
+
+        if stats['medium_enabled']:
+            self.check_milestone('medium_unlocked', True, episode,
+                               "Medium difficulty unlocked!")
+            if stats['medium_success_rate'] >= 75:
+                self.check_milestone('medium_mastery_75', True, episode,
+                                   f"Medium fish mastery! ({stats['medium_success_rate']:.1f}% success rate)")
+
+        if stats['hard_enabled']:
+            self.check_milestone('hard_unlocked', True, episode,
+                               "Hard difficulty unlocked!")
+            if stats['hard_success_rate'] >= 75:
+                self.check_milestone('hard_mastery_75', True, episode,
+                                   f"Hard fish mastery! ({stats['hard_success_rate']:.1f}% success rate)")
+
+        # Overall performance milestones
+        if stats['win_rate'] >= 80:
+            self.check_milestone('overall_80_percent', True, episode,
+                               f"80% overall win rate achieved! ({stats['win_rate']:.1f}%)")
+        if stats['win_rate'] >= 90:
+            self.check_milestone('overall_90_percent', True, episode,
+                               f"90% overall win rate achieved! ({stats['win_rate']:.1f}%)")
+
+    def close(self):
+        """Close CSV file"""
+        self.csv_file.close()
+        print(f"\n📊 Training metrics saved to: {self.csv_path}")
+        print(f"🏆 Milestone log saved to: {self.milestone_log_path}")
 
 
 class SumTree:
@@ -418,6 +560,11 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.2, eps_end=0
     # Create directory for saving models
     os.makedirs("models", exist_ok=True)
 
+    # Initialize milestone tracker for YouTube video
+    milestone_tracker = MilestoneTracker(log_dir="training_logs")
+    print(f"📊 Logging detailed metrics to: {milestone_tracker.csv_path}")
+    print(f"🏆 Milestone tracking enabled\n")
+
     # Track difficulties mastered with adaptive thresholds
     difficulty_buckets = {
         'easy': {'range': (0, 40), 'attempts': 0, 'success': 0, 'enabled': True},
@@ -530,6 +677,42 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.2, eps_end=0
         scores_window.append(score)
         scores.append(score)
 
+        # Calculate stats for milestone tracking
+        avg_score = np.mean(scores_window) if len(scores_window) > 0 else 0.0
+        success_count = sum(1 for i in range(max(0, len(scores) - 100), len(scores)) if scores[i] > 0)
+        win_rate = success_count / min(100, len(scores)) * 100
+
+        # Calculate per-difficulty success rates
+        def calc_bucket_rate(bucket_name):
+            bucket = difficulty_buckets[bucket_name]
+            if bucket['attempts'] > 0:
+                return (bucket['success'] / bucket['attempts']) * 100
+            return 0.0
+
+        # Update milestone tracker
+        milestone_tracker.update(
+            episode=i_episode,
+            score=score,
+            success=(env.distanceFromCatching >= 1.0),
+            fish_info={
+                'name': fish_name,
+                'difficulty': fish_difficulty,
+                'behavior': fish_behavior,
+                'episode_length': env.episode_length
+            },
+            epsilon=eps,
+            stats={
+                'avg_score': avg_score,
+                'win_rate': win_rate,
+                'easy_success_rate': calc_bucket_rate('easy'),
+                'medium_success_rate': calc_bucket_rate('medium'),
+                'hard_success_rate': calc_bucket_rate('hard'),
+                'easy_enabled': difficulty_buckets['easy']['enabled'],
+                'medium_enabled': difficulty_buckets['medium']['enabled'],
+                'hard_enabled': difficulty_buckets['hard']['enabled'],
+            }
+        )
+
         # Adaptive curriculum advancement - check if we should enable harder difficulties
         if i_episode % 100 == 0 and i_episode > 100:
             for idx, (bucket_name, bucket_data) in enumerate(difficulty_buckets.items()):
@@ -549,7 +732,6 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.2, eps_end=0
 
         # Print progress
         if i_episode % 100 == 0:
-            avg_score = np.mean(scores_window)
             elapsed_time = time.time() - training_start_time
             hours, remainder = divmod(elapsed_time, 3600)
             minutes, seconds = divmod(remainder, 60)
@@ -558,12 +740,7 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.2, eps_end=0
             print(f'Episode {i_episode}/{n_episodes} ({i_episode / n_episodes * 100:.1f}%) | '
                   f'Time: {int(hours)}h {int(minutes)}m {int(seconds)}s | '
                   f'Average Score: {avg_score:.2f} | Epsilon: {eps:.4f} | Enabled: {", ".join(enabled_levels)}')
-
-            # Calculate success rate over last 100 episodes
-            success_count = sum(1 for i in range(max(0, len(scores) - 100), len(scores))
-                                if scores[i] > 0)
-            win_rate = success_count / min(100, len(scores)) * 100
-            print(f'Recent Win Rate: {win_rate:.1f}%')
+            print(f'Recent Win Rate: {win_rate:.1f}% | Current Streak: {milestone_tracker.current_win_streak} | Max Streak: {milestone_tracker.max_win_streak}')
 
         # Save model periodically
         if i_episode % save_every == 0:
@@ -688,6 +865,9 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.2, eps_end=0
     # Save final model
     agent.save('models/dqn_fishing_final.pth')
 
+    # Close milestone tracker and save logs
+    milestone_tracker.close()
+
     # Final training stats
     total_training_time = time.time() - training_start_time
     hours, remainder = divmod(total_training_time, 3600)
@@ -697,6 +877,7 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.2, eps_end=0
     print(f"Total episodes: {i_episode}")
     print(f"Total training time: {int(hours)}h {int(minutes)}m {int(seconds)}s")
     print(f"Final win rate (last 100 episodes): {win_rate:.1f}%")
+    print(f"Max win streak: {milestone_tracker.max_win_streak} episodes")
 
     return scores
 
@@ -812,7 +993,7 @@ if __name__ == "__main__":
             max_t=2000,                 # Maximum timesteps per episode
             eps_start=0.2,              # Start with good exploration (cosine annealing)
             eps_end=0.001,              # Lower final exploration
-            save_every=500,             # Save checkpoints regularly
+            save_every=100,             # Save checkpoints frequently for YouTube milestones
             render_every=1000           # Occasional visual check
         )
         agent.save('models/dqn_fishing_final.pth')
