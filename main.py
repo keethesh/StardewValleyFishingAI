@@ -787,8 +787,9 @@ if __name__ == "__main__":
     env = FishingMinigameEnv(render_mode="human")
 
     # Create agent with all improvements: Dueling DQN, Prioritized Replay, N-step returns
+    # State dimension now 14: added 3 temporal features (bobber accel, bar accel, distance to bar)
     agent = DQNAgent(
-        state_dim=11,  # Updated from 10 to 11 for time dimension
+        state_dim=14,  # Updated from 11 to 14 for temporal features
         action_dim=2,
         hidden_sizes=[128, 128, 64],
         learning_rate=3e-4,

@@ -62,8 +62,14 @@ class FishingMinigameEnv:
             'height': self.track_height,
             'max_fish_size': 20,  # Will be set in reset
             'speed_norm': 10.0,
+            'accel_norm': 5.0,  # For acceleration normalization
             'max_timesteps': 2000
         }
+
+        # Temporal feature tracking (for velocity/acceleration)
+        self._state_history = deque(maxlen=3)
+        self._prev_bobber_speed = 0.0
+        self._prev_bar_speed = 0.0
 
         # Create GUI if needed
         if render_mode == "human":
@@ -176,24 +182,44 @@ class FishingMinigameEnv:
         self.episode_reward = 0
         self.episode_length = 0
 
+        # Reset temporal tracking
+        self._state_history.clear()
+        self._prev_bobber_speed = 0.0
+        self._prev_bar_speed = 0.0
+
         # Return the initial observation
         return self._get_observation()
 
     def _get_observation(self):
-        """Convert game state to ML-friendly observation vector with optional normalization."""
-        # Use cached constants for better performance
+        """Convert game state to ML-friendly observation vector with temporal features."""
+        # Calculate accelerations (change in speed)
+        bobber_acceleration = (self.bobberSpeed - self._prev_bobber_speed) / self._norm_constants['accel_norm']
+        bar_acceleration = (self.bobberBarSpeed - self._prev_bar_speed) / self._norm_constants['accel_norm']
+
+        # Update previous speeds for next calculation
+        self._prev_bobber_speed = self.bobberSpeed
+        self._prev_bar_speed = self.bobberBarSpeed
+
+        # Calculate distance to bar center (helps agent know direction to move)
+        bar_center = self.bobberBarPos + (self.bobberBarHeight / 2.0)
+        distance_to_bar = (self.bobberPosition - bar_center) / self._norm_constants['height']
+
+        # Build observation with temporal features
         obs = np.array([
-            self.bobberPosition / self._norm_constants['height'],  # normalized fish position
-            self.bobberSpeed / self._norm_constants['speed_norm'],  # normalized fish speed
-            self.bobberBarPos / self._norm_constants['height'],  # normalized bar position
-            self.bobberBarSpeed / self._norm_constants['speed_norm'],  # normalized bar speed
-            self.bobberBarHeight / self._norm_constants['height'],  # normalized bar height
+            self.bobberPosition / self._norm_constants['height'],  # fish position
+            self.bobberSpeed / self._norm_constants['speed_norm'],  # fish speed
+            bobber_acceleration,  # NEW: fish acceleration
+            self.bobberBarPos / self._norm_constants['height'],  # bar position
+            self.bobberBarSpeed / self._norm_constants['speed_norm'],  # bar speed
+            bar_acceleration,  # NEW: bar acceleration
+            self.bobberBarHeight / self._norm_constants['height'],  # bar height
+            distance_to_bar,  # NEW: signed distance to bar center
             float(self.bobberInBar),  # binary: fish in bar?
             self.distanceFromCatching,  # progress toward catching (0-1)
-            self.fishSize / self._norm_constants['max_fish_size'],  # normalized fish size
-            self.difficulty / 100.0,  # normalized difficulty
-            float(self.motionType) / 4.0,  # normalized motion type
-            self.current_timestep / self._norm_constants['max_timesteps'],  # normalized time progress
+            self.fishSize / self._norm_constants['max_fish_size'],  # fish size
+            self.difficulty / 100.0,  # difficulty
+            float(self.motionType) / 4.0,  # motion type
+            self.current_timestep / self._norm_constants['max_timesteps'],  # time progress
         ], dtype=np.float32)
 
         # Apply running normalization if enabled
