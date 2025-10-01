@@ -275,24 +275,34 @@ class FishingMinigameEnv:
         # Progress reward: improvement in catching progress
         progress_reward = (self.distanceFromCatching - prev_distance) * 10.0
 
-        # Reward for keeping fish in bar
-        in_bar_reward = 0.1 if self.bobberInBar else -0.05
-
-        # NEW: Proximity reward - guide bar toward fish
+        # Reward for keeping fish in bar WITH centering bonus
         bar_center = self.bobberBarPos + (self.bobberBarHeight / 2.0)
+
+        if self.bobberInBar:
+            # Base reward for being in bar
+            in_bar_reward = 0.1
+
+            # NEW: Centering bonus - reward keeping fish centered in bar
+            fish_position_in_bar = abs(self.bobberPosition - bar_center) / (self.bobberBarHeight / 2.0)
+            centering_bonus = 0.15 * (1.0 - fish_position_in_bar)  # Higher bonus for center
+            in_bar_reward += centering_bonus
+        else:
+            in_bar_reward = -0.05
+            centering_bonus = 0.0
+
+        # Proximity reward - guide bar toward fish when not in bar
         distance_to_fish = abs(bar_center - self.bobberPosition)
         normalized_distance = distance_to_fish / self.track_height
         proximity_reward = -0.02 * normalized_distance  # Closer is better
 
-        # NEW: Velocity matching reward - encourage smooth control
-        # When fish is moving, try to match its velocity
+        # Velocity matching reward - encourage smooth control
         velocity_diff = abs(self.bobberSpeed - self.bobberBarSpeed)
         velocity_penalty = -0.005 * velocity_diff
 
         # Penalty for extreme movements (reduced weight)
         movement_penalty = -0.005 * abs(self.bobberBarSpeed)
 
-        # NEW: Early progress bonus - combat sparse rewards early on
+        # Early progress bonus - combat sparse rewards early on
         early_bonus = 0.0
         if self.distanceFromCatching < 0.3 and self.bobberInBar:
             early_bonus = 0.05  # Extra encouragement in early stages
