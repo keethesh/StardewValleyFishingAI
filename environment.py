@@ -30,7 +30,7 @@ class FishingMinigameEnv:
         "floater": 4  # Tends to float
     }
 
-    def __init__(self, render_mode="human", seed=None, fish_name=None, normalize_obs=False):
+    def __init__(self, render_mode="human", seed=None, fish_name=None, normalize_obs=False, augment_fish=True):
         # Set random seed if provided
         self.np_random = np.random.RandomState(seed)
 
@@ -44,6 +44,9 @@ class FishingMinigameEnv:
         # Current fish info
         self.current_fish = None
         self.fish_name = fish_name  # Will select a specific fish if provided
+
+        # Data augmentation flag (randomize fish parameters slightly for generalization)
+        self.augment_fish = augment_fish
 
         # Pygame rendering setup
         self.render_mode = render_mode
@@ -100,18 +103,33 @@ class FishingMinigameEnv:
             return [{"name": "Default Fish", "difficulty": 50, "behaviour": "mixed"}]
 
     def select_fish(self, fish_name=None):
-        """Select a fish by name or randomly."""
+        """Select a fish by name or randomly, with optional parameter augmentation."""
         if fish_name:
             # Find fish by name
             for fish in self.fish_data:
                 if fish["name"].lower() == fish_name.lower():
-                    return fish
-
-        # Select random fish if not found or none specified
-        if self.fish_data:
-            return self.np_random.choice(self.fish_data)
+                    selected_fish = fish.copy()
+                    break
+            else:
+                # Fish not found, select random
+                selected_fish = self.np_random.choice(self.fish_data).copy() if self.fish_data else {
+                    "name": "Default Fish", "difficulty": 50, "behaviour": "mixed"}
         else:
-            return {"name": "Default Fish", "difficulty": 50, "behaviour": "mixed"}
+            # Select random fish if not found or none specified
+            if self.fish_data:
+                selected_fish = self.np_random.choice(self.fish_data).copy()
+            else:
+                selected_fish = {"name": "Default Fish", "difficulty": 50, "behaviour": "mixed"}
+
+        # Apply data augmentation if enabled (randomize difficulty slightly)
+        if self.augment_fish:
+            # Add random variation to difficulty (±10%)
+            difficulty_variation = self.np_random.uniform(-0.10, 0.10)
+            augmented_difficulty = selected_fish["difficulty"] * (1.0 + difficulty_variation)
+            # Clamp to valid range [1, 110]
+            selected_fish["difficulty"] = int(np.clip(augmented_difficulty, 1, 110))
+
+        return selected_fish
 
     def get_motion_type(self, behaviour):
         """Convert behaviour string to motion type."""

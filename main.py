@@ -316,21 +316,24 @@ class PrioritizedReplayBuffer:
 
 
 class DuelingDQN(nn.Module):
-    """Dueling Deep Q-Network with Layer Normalization"""
+    """Dueling Deep Q-Network with Layer Normalization and Dropout"""
 
-    def __init__(self, state_dim=10, action_dim=2, hidden_sizes=[128, 128, 64]):
+    def __init__(self, state_dim=10, action_dim=2, hidden_sizes=[128, 128, 64], dropout_rate=0.2):
         super(DuelingDQN, self).__init__()
 
         self.action_dim = action_dim
 
-        # Shared feature extraction layers with Layer Normalization
+        # Shared feature extraction layers with Layer Normalization and Dropout
         feature_layers = []
         input_size = state_dim
 
-        for hidden_size in hidden_sizes:
+        for i, hidden_size in enumerate(hidden_sizes):
             feature_layers.append(nn.Linear(input_size, hidden_size))
             feature_layers.append(nn.LayerNorm(hidden_size))
             feature_layers.append(nn.ReLU())
+            # Add dropout after ReLU (but not on last layer)
+            if i < len(hidden_sizes) - 1:
+                feature_layers.append(nn.Dropout(dropout_rate))
             input_size = hidden_size
 
         self.feature_layer = nn.Sequential(*feature_layers)
@@ -340,6 +343,7 @@ class DuelingDQN(nn.Module):
             nn.Linear(input_size, 64),
             nn.LayerNorm(64),
             nn.ReLU(),
+            nn.Dropout(dropout_rate),
             nn.Linear(64, 1)
         )
 
@@ -348,6 +352,7 @@ class DuelingDQN(nn.Module):
             nn.Linear(input_size, 64),
             nn.LayerNorm(64),
             nn.ReLU(),
+            nn.Dropout(dropout_rate),
             nn.Linear(64, action_dim)
         )
 
@@ -980,8 +985,9 @@ if __name__ == "__main__":
         target_update_freq=1000  # Hard update every 1000 steps
     )
 
-    # Train or load model
-    train_new_model = False  # Set to False to load a saved model
+    # Training modes
+    train_new_model = False  # Set to True to train from scratch
+    fine_tune_model = False  # Set to True to continue training with new fish
 
     if train_new_model:
         scores = train_dqn(
@@ -995,8 +1001,36 @@ if __name__ == "__main__":
             render_every=1000           # Occasional visual check
         )
         agent.save('models/dqn_fishing_final.pth')
+
+    elif fine_tune_model:
+        # Load pre-trained model and continue training (for new fish)
+        model_path = 'models/dqn_fishing_final.pth'  # Change to desired checkpoint
+        if os.path.exists(model_path):
+            agent.load(model_path)
+            print(f"Loaded model from {model_path}")
+            print("Starting fine-tuning with reduced learning rate and augmentation...")
+
+            # Reduce learning rate for fine-tuning
+            for param_group in agent.optimizer.param_groups:
+                param_group['lr'] = 1e-4  # Lower learning rate
+
+            # Continue training
+            scores = train_dqn(
+                env=env,
+                agent=agent,
+                n_episodes=2000,            # Fewer episodes for fine-tuning
+                max_t=2000,
+                eps_start=0.05,             # Lower exploration (already knows basics)
+                eps_end=0.001,
+                save_every=100,
+                render_every=500
+            )
+            agent.save('models/dqn_fishing_finetuned.pth')
+        else:
+            print(f"Model file {model_path} not found. Cannot fine-tune.")
+
     else:
-        # Load pre-trained model
+        # Load pre-trained model for evaluation only
         model_path = 'models/dqn_fishing_final.pth'  # Change to desired model file
         if os.path.exists(model_path):
             agent.load(model_path)
