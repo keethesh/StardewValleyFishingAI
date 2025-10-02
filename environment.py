@@ -1,10 +1,15 @@
 import json
+import logging
 import os
 import time
-import tkinter as tk
 from collections import deque
+from typing import Dict, List, Optional, Tuple, Union, Any
 
 import numpy as np
+import pygame
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 class FishingMinigameEnv:
@@ -40,11 +45,16 @@ class FishingMinigameEnv:
         self.current_fish = None
         self.fish_name = fish_name  # Will select a specific fish if provided
 
-        # Rendering setup
+        # Pygame rendering setup
         self.render_mode = render_mode
-        self.root = None
-        self.canvas = None
+        self.screen = None
+        self.clock = None
+        self.font = None
         self.button_pressed = False  # Track button state for human play
+
+        # Sprite storage
+        self.sprites = {}
+        self.sprites_loaded = False
 
         # For tracking ML training progress
         self.episode_reward = 0
@@ -72,9 +82,9 @@ class FishingMinigameEnv:
         self._prev_bobber_speed = 0.0
         self._prev_bar_speed = 0.0
 
-        # Create GUI if needed
+        # Initialize Pygame if needed
         if render_mode == "human":
-            self.setup_gui()
+            self.setup_pygame()
 
         # Initialize the environment
         self.reset()
@@ -82,10 +92,10 @@ class FishingMinigameEnv:
     def load_fish_data(self):
         """Load fish data from fish.json file."""
         try:
-            with open("fish.json", "r") as f:
+            with open("data/fish.json", "r") as f:
                 return json.load(f)
         except (FileNotFoundError, json.JSONDecodeError) as e:
-            print(f"Error loading fish.json: {e}")
+            logger.error(f"Error loading fish.json: {e}")
             # Provide default fish data if file not found or invalid
             return [{"name": "Default Fish", "difficulty": 50, "behaviour": "mixed"}]
 
@@ -108,34 +118,92 @@ class FishingMinigameEnv:
         behaviour = behaviour.lower()
         return self.BEHAVIOR_TYPES.get(behaviour, 0)  # Default to mixed if unknown
 
-    def setup_gui(self):
-        """Setup the GUI components."""
-        self.root = tk.Tk()
-        self.root.title("Fishing Minigame (ML Environment)")
-        self.canvas = tk.Canvas(self.root, width=self.track_width, height=self.track_height, bg="lightblue")
-        self.canvas.pack()
+    def load_sprites(self):
+        """Load Stardew Valley sprites from individual asset files."""
+        try:
+            # Define sprite files
+            sprite_files = {
+                'background': 'assets/background.png',
+                'fish_normal': 'assets/fish_normal.png',
+                'fish_boss': 'assets/fish_boss.png',
+                'catch_bar_top': 'assets/catch_bar_top.png',
+                'catch_bar_mid': 'assets/catch_bar_mid.png',
+                'catch_bar_bot': 'assets/catch_bar_bot.png',
+                'handle': 'assets/handle.png'
+            }
 
-        # Setup key bindings for human play
-        self.root.bind("<KeyPress-space>", self.on_key_press)
-        self.root.bind("<KeyRelease-space>", self.on_key_release)
-        self.root.bind("<ButtonPress-1>", self.on_mouse_press)
-        self.root.bind("<ButtonRelease-1>", self.on_mouse_release)
+            # Load and scale each sprite
+            UI_SCALE = 4.0  # Authentic 4x UI scale from Stardew Valley
 
-    def on_key_press(self, event):
-        """Handle key press events for human play"""
-        self.button_pressed = True
+            for name, file_path in sprite_files.items():
+                try:
+                    sprite_surface = pygame.image.load(file_path).convert_alpha()
+                    original_width, original_height = sprite_surface.get_size()
+                    scaled_width = int(original_width * UI_SCALE)
+                    scaled_height = int(original_height * UI_SCALE)
+                    scaled_surface = pygame.transform.scale(sprite_surface, (scaled_width, scaled_height))
+                    self.sprites[name] = scaled_surface
+                except Exception as e:
+                    logger.warning(f"Could not load sprite '{name}' from {file_path}: {e}")
+                    continue
 
-    def on_key_release(self, event):
-        """Handle key release events for human play"""
-        self.button_pressed = False
+            if len(self.sprites) > 0:
+                logger.info(f"Loaded {len(self.sprites)} Stardew Valley sprites from assets/")
+                return True
+            else:
+                logger.error("No sprites could be loaded from assets/")
+                return False
 
-    def on_mouse_press(self, event):
-        """Handle mouse press events for human play"""
-        self.button_pressed = True
+        except Exception as e:
+            logger.error(f"Critical error loading sprites: {e}")
+            return False
 
-    def on_mouse_release(self, event):
-        """Handle mouse release events for human play"""
-        self.button_pressed = False
+    def setup_pygame(self):
+        """Setup Pygame display and components."""
+        pygame.init()
+        pygame.font.init()
+
+        # Create display with proper dimensions
+        self.screen = pygame.display.set_mode((800, 700))
+        pygame.display.set_caption("Stardew Valley Fishing Minigame")
+
+        # Create clock for frame rate control
+        self.clock = pygame.time.Clock()
+
+        # Load font for text
+        try:
+            self.font = pygame.font.Font(None, 24)
+        except:
+            self.font = pygame.font.SysFont('Arial', 24)
+
+        # UI constants for authentic Stardew Valley layout
+        self.UI_SCALE = 4.0
+        self.UI_BASE_X = 200
+        self.UI_BASE_Y = 50
+
+        # Load sprites
+        self.sprites_loaded = self.load_sprites()
+
+    def handle_pygame_events(self):
+        """Handle Pygame events for input and window management"""
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    self.button_pressed = True
+                elif event.key == pygame.K_ESCAPE:
+                    return False
+            elif event.type == pygame.KEYUP:
+                if event.key == pygame.K_SPACE:
+                    self.button_pressed = False
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:
+                    self.button_pressed = True
+            elif event.type == pygame.MOUSEBUTTONUP:
+                if event.button == 1:
+                    self.button_pressed = False
+        return True
 
     def seed(self, seed=None):
         """Set random seed for reproducibility."""
@@ -290,10 +358,13 @@ class FishingMinigameEnv:
                 "distance_from_catching": self.distanceFromCatching, "bobber_in_bar": self.bobberInBar,
                 "episode_length": self.episode_length, "episode_reward": self.episode_reward, }
 
-        # Render if needed (optimized)
-        if self.render_mode == "human" and self.root is not None:
+        # Render if needed
+        if self.render_mode == "human":
+            if not self.handle_pygame_events():
+                done = True
             self._render_frame()
-            self.root.update_idletasks()  # Faster than full update()
+            if self.clock:
+                self.clock.tick(60)
 
         return obs, reward, done, info
 
@@ -446,58 +517,184 @@ class FishingMinigameEnv:
         if self.distanceFromCatching <= 0.0 or self.distanceFromCatching >= 1.0:
             self.handledFishResult = True
 
+    def _get_red_to_green_lerp_color(self, value):
+        """Calculates a color between red and green based on a 0.0-1.0 value."""
+        r = int(min(2.0 - 2.0 * value, 1.0) * 255)
+        g = int(min(2.0 * value, 1.0) * 255)
+        return (r, g, 0)
+
     def _render_frame(self):
-        """Render the current frame to the canvas."""
-        if self.canvas is None:
+        """Render the current frame using authentic Stardew Valley sprites."""
+        if self.screen is None:
             return
 
-        self.canvas.delete("all")
+        # Clear screen with dark blue background
+        self.screen.fill((50, 50, 80))
 
-        # Draw track
-        self.canvas.create_rectangle(0, 0, self.track_width, self.track_height, fill="white", outline="black")
+        # Use authentic sprite-based rendering if sprites are loaded
+        if self.sprites_loaded:
+            self._draw_fishing_ui_sprites()
+        else:
+            self._draw_fishing_ui_fallback()
 
-        # Draw bobber bar
-        bar_x1 = 20
-        bar_x2 = 80
-        bar_y1 = self.bobberBarPos
-        bar_y2 = self.bobberBarPos + self.bobberBarHeight
-        self.canvas.create_rectangle(bar_x1, bar_y1, bar_x2, bar_y2, fill="green" if self.bobberInBar else "orange",
-                                     outline="black")
+        # Update display
+        pygame.display.flip()
 
-        # Draw fish (centered at middle of track)
-        fish_x = self.track_width // 2
-        fish_radius = 10
-        fish_y = self.bobberPosition
-        self.canvas.create_oval(fish_x - fish_radius, fish_y - fish_radius, fish_x + fish_radius, fish_y + fish_radius,
-                                fill="red", outline="black")
+    def _draw_fishing_ui_sprites(self):
+        """Draw the fishing UI using authentic Stardew Valley sprites."""
+        # Draw the Bobber Bar Background
+        if 'background' in self.sprites:
+            bg_sprite = self.sprites['background']
+            bg_x = self.UI_BASE_X + 70 - (bg_sprite.get_width() / 2)
+            bg_y = self.UI_BASE_Y + 296 - (bg_sprite.get_height() / 2)
+            self.screen.blit(bg_sprite, (bg_x, bg_y))
+
+        # Draw the Green Catch Bar (Stretched from 3 parts)
+        bar_x = self.UI_BASE_X + 64
+        bar_y = self.UI_BASE_Y + 12 + self.bobberBarPos
+
+        if all(key in self.sprites for key in ['catch_bar_top', 'catch_bar_mid', 'catch_bar_bot']):
+            top_sprite = self.sprites['catch_bar_top']
+            mid_sprite = self.sprites['catch_bar_mid']
+            bot_sprite = self.sprites['catch_bar_bot']
+
+            # Calculate middle section height
+            original_top_height = 2 * self.UI_SCALE
+            original_bot_height = 2 * self.UI_SCALE
+            middle_height = self.bobberBarHeight - (original_top_height + original_bot_height)
+
+            # Scale middle section to fill the gap
+            mid_scaled = pygame.transform.scale(mid_sprite, (mid_sprite.get_width(), int(middle_height)))
+
+            # Draw the three parts
+            self.screen.blit(top_sprite, (bar_x, bar_y))
+            self.screen.blit(mid_scaled, (bar_x, bar_y + top_sprite.get_height()))
+            self.screen.blit(bot_sprite, (bar_x, bar_y + top_sprite.get_height() + mid_scaled.get_height()))
+
+        # Draw the Fish Icon
+        is_boss_fish = self.difficulty >= 80
+        fish_sprite_key = 'fish_boss' if is_boss_fish else 'fish_normal'
+
+        if fish_sprite_key in self.sprites:
+            fish_sprite = self.sprites[fish_sprite_key]
+            fish_x = self.UI_BASE_X + 64 + 18 - (fish_sprite.get_width() / 2)
+            fish_draw_y = self.UI_BASE_Y + 12 + 24 + self.bobberPosition - (fish_sprite.get_height() / 2)
+            self.screen.blit(fish_sprite, (fish_x, fish_draw_y))
+
+        # Draw the Catch Percentage Indicator
+        bar_total_height_pixels = 580
+        bar_width_pixels = 16
+
+        indicator_height = int(bar_total_height_pixels * self.distanceFromCatching)
+        indicator_y = self.UI_BASE_Y + 4 + (bar_total_height_pixels - indicator_height)
+        indicator_x = self.UI_BASE_X + 124
+
+        color = self._get_red_to_green_lerp_color(self.distanceFromCatching)
+        pygame.draw.rect(self.screen, color, (indicator_x, indicator_y, bar_width_pixels, indicator_height))
+
+        # Draw Fish Info Text
+        text_x = self.UI_BASE_X + 160
+        fish_text = self.font.render(f"Fish: {self.current_fish['name']}", True, (255, 255, 255))
+        self.screen.blit(fish_text, (text_x, self.UI_BASE_Y))
+
+        difficulty_text = self.font.render(f"Difficulty: {self.difficulty}", True, (255, 255, 255))
+        self.screen.blit(difficulty_text, (text_x, self.UI_BASE_Y + 25))
+
+        progress_text = self.font.render(f"Progress: {self.distanceFromCatching:.1%}", True, (255, 255, 255))
+        self.screen.blit(progress_text, (text_x, self.UI_BASE_Y + 50))
+
+        # Game state info
+        if self.done:
+            font_large = pygame.font.Font(None, 48)
+            result = "YOU WIN!" if self.distanceFromCatching >= 1.0 else "YOU LOSE!"
+            result_text = font_large.render(result, True, (255, 255, 255))
+            result_rect = result_text.get_rect(center=(400, 350))
+            self.screen.blit(result_text, result_rect)
+        else:
+            controls_text = self.font.render("Hold SPACE to pull", True, (255, 255, 255))
+            self.screen.blit(controls_text, (text_x, self.UI_BASE_Y + 75))
+
+    def _draw_fishing_ui_fallback(self):
+        """Fallback UI drawing when sprites aren't available."""
+        TRACK_X = 100
+        TRACK_Y = 50
+        TRACK_WIDTH = 50
+        TRACK_HEIGHT = 568
+
+        # Colors
+        COLOR_TRACK = (48, 110, 156)
+        COLOR_PLAYER_BAR = (125, 225, 80)
+        COLOR_FISH = (227, 158, 48)
+        COLOR_PROGRESS_BG = (100, 100, 100)
+
+        # Draw the main bobber bar track
+        pygame.draw.rect(self.screen, COLOR_TRACK, (TRACK_X, TRACK_Y, TRACK_WIDTH, TRACK_HEIGHT))
+
+        # Draw player bar (catch area)
+        bar_y = TRACK_Y + self.bobberBarPos
+        bar_height = self.bobberBarHeight
+        player_bar_rect = pygame.Rect(TRACK_X, bar_y, TRACK_WIDTH, bar_height)
+
+        bar_color = COLOR_PLAYER_BAR if self.bobberInBar else (255, 165, 0)
+        pygame.draw.rect(self.screen, bar_color, player_bar_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), player_bar_rect, 2)
+
+        # Draw fish
+        fish_y = TRACK_Y + self.bobberPosition
+        fish_height = 20
+        fish_rect = pygame.Rect(TRACK_X, fish_y, TRACK_WIDTH, fish_height)
+        pygame.draw.rect(self.screen, COLOR_FISH, fish_rect)
 
         # Draw progress bar
-        progress_width = 10
-        progress_x = 85
-        progress_height = int(self.track_height * self.distanceFromCatching)
-        progress_y = self.track_height - progress_height
-        self.canvas.create_rectangle(progress_x, progress_y, progress_x + progress_width, self.track_height,
-                                     fill="blue", outline="black")
+        progress_bar_x = TRACK_X + TRACK_WIDTH + 20
+        progress_bar_height = TRACK_HEIGHT
 
-        # Display fish info
-        self.canvas.create_text(50, 10, text=f"Fish: {self.current_fish['name']}", fill="black")
-        self.canvas.create_text(50, 30, text=f"Difficulty: {self.difficulty}", fill="black")
-        self.canvas.create_text(50, 50, text=f"Progress: {self.distanceFromCatching:.2f}", fill="black")
+        pygame.draw.rect(self.screen, COLOR_PROGRESS_BG, (progress_bar_x, TRACK_Y, 30, progress_bar_height))
 
-        # Display controls help
+        fill_height = progress_bar_height * self.distanceFromCatching
+        fill_color = self._get_red_to_green_lerp_color(self.distanceFromCatching)
+
+        pygame.draw.rect(self.screen, fill_color,
+                         (progress_bar_x, TRACK_Y + progress_bar_height - fill_height, 30, fill_height))
+
+        pygame.draw.rect(self.screen, (255, 255, 255), (progress_bar_x, TRACK_Y, 30, progress_bar_height), 2)
+
+        # Text info
+        text_x = TRACK_X + TRACK_WIDTH + 70
+        fish_text = self.font.render(f"Fish: {self.current_fish['name']}", True, (255, 255, 255))
+        self.screen.blit(fish_text, (text_x, TRACK_Y))
+
         if self.done:
-            result = "Success!" if self.distanceFromCatching >= 1.0 else "Failed!"
-            self.canvas.create_text(50, 70, text=f"Game Over - {result}", fill="red")
-            self.canvas.create_text(50, 90, text="Press R to restart", fill="red")
-        else:
-            self.canvas.create_text(50, 70, text="Hold SPACE to pull", fill="black")
+            font_large = pygame.font.Font(None, 48)
+            result = "YOU WIN!" if self.distanceFromCatching >= 1.0 else "YOU LOSE!"
+            result_text = font_large.render(result, True, (255, 255, 255))
+            result_rect = result_text.get_rect(center=(400, 350))
+            self.screen.blit(result_text, result_rect)
+
+    def set_render_mode(self, mode: str):
+        """Change the render mode and setup/cleanup accordingly."""
+        if mode == self.render_mode:
+            return
+
+        # Clean up old mode
+        if self.render_mode == "human" and self.screen is not None:
+            pygame.quit()
+            self.screen = None
+            self.clock = None
+            self.font = None
+
+        # Setup new mode
+        self.render_mode = mode
+        if mode == "human":
+            self.setup_pygame()
 
     def close(self):
         """Close the environment and clean up resources."""
-        if self.root is not None:
-            self.root.destroy()
-            self.root = None
-            self.canvas = None
+        if self.screen is not None:
+            pygame.quit()
+            self.screen = None
+            self.clock = None
+            self.font = None
 
     def get_available_fish(self):
         """Return list of available fish names."""
@@ -507,19 +704,20 @@ class FishingMinigameEnv:
 # Create a default fish.json file if it doesn't exist
 def create_default_fish_file():
     """Create a default fish.json file if it doesn't exist."""
-    if not os.path.exists("fish.json"):
-        default_fish = {"fish": [{"name": "Pufferfish", "difficulty": 80, "behaviour": "floater"},
-                                 {"name": "Salmon", "difficulty": 50, "behaviour": "mixed"},
-                                 {"name": "Octopus", "difficulty": 95, "behaviour": "sinker"},
-                                 {"name": "Trout", "difficulty": 30, "behaviour": "mixed"},
-                                 {"name": "Shark", "difficulty": 90, "behaviour": "dart"}]}
+    if not os.path.exists("data/fish.json"):
+        default_fish = [{"name": "Pufferfish", "difficulty": 80, "behaviour": "floater"},
+                        {"name": "Salmon", "difficulty": 50, "behaviour": "mixed"},
+                        {"name": "Octopus", "difficulty": 95, "behaviour": "sinker"},
+                        {"name": "Trout", "difficulty": 30, "behaviour": "mixed"},
+                        {"name": "Shark", "difficulty": 90, "behaviour": "dart"}]
 
         try:
-            with open("fish.json", "w") as f:
+            os.makedirs("data", exist_ok=True)
+            with open("data/fish.json", "w") as f:
                 json.dump(default_fish, f, indent=2)
-            print("Created default fish.json file")
+            logger.info("Created default data/fish.json file")
         except Exception as e:
-            print(f"Error creating fish.json: {e}")
+            logger.error(f"Error creating fish.json: {e}")
 
 
 # Example of how to collect training data with various fish
@@ -581,41 +779,38 @@ if __name__ == "__main__":
 
     # Print available fish
     print("Available fish:", env.get_available_fish())
-
-
-    # Add reset key binding
-    def on_reset(event):
-        if env.done and event.keysym == 'r':
-            print("Resetting game...")
-            # Choose a random fish for variety
-            env.fish_name = env.np_random.choice(env.get_available_fish()) if env.fish_data else None
-            env.reset()
-
-
-    env.root.bind('<KeyPress-r>', on_reset)
+    print("Controls: SPACE or mouse click to pull up, release to let down")
+    print("Press ESC to quit, R to reset when done")
 
     # Start the game loop manually
     obs = env.reset()
 
     while True:
         try:
+            # Handle pygame events
+            if not env.handle_pygame_events():
+                break
+
+            # Check for reset key (R)
+            keys = pygame.key.get_pressed()
+            if env.done and keys[pygame.K_r]:
+                print("Resetting game...")
+                env.fish_name = env.np_random.choice(env.get_available_fish()) if env.fish_data else None
+                env.reset()
+                continue
+
             if env.done:
-                # Wait for reset key input, but keep updating UI
-                env.root.update()
-                time.sleep(0.016)
+                # Wait for reset key input
+                env.clock.tick(60)
                 continue
 
             # Use the button_pressed state from key/mouse events
             action = FishingMinigameEnv.ACTION_PRESS if env.button_pressed else FishingMinigameEnv.ACTION_NONE
             obs, reward, done, info = env.step(action)
 
-            # Update the UI
-            env.root.update()
-            time.sleep(0.016)  # ~60 FPS
+            # Maintain frame rate
+            env.clock.tick(60)
 
-        except tk.TclError:
-            # Window was closed
-            break
         except KeyboardInterrupt:
             break
 

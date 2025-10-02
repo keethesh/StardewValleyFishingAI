@@ -653,8 +653,7 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.2, eps_end=0
             state = next_state
             score += reward
 
-            if render and env.root is not None:
-                env.root.update_idletasks()  # Optimized rendering
+            if render:
                 time.sleep(0.01)  # slow down rendering
 
             if done:
@@ -937,7 +936,6 @@ def evaluate_agent(env, agent, n_episodes=20, render=True):
             score += reward
 
             if render and env.render_mode == "human":
-                env.root.update()
                 time.sleep(0.01)  # slow down rendering
 
             if done:
@@ -983,7 +981,7 @@ if __name__ == "__main__":
     )
 
     # Train or load model
-    train_new_model = True  # Set to False to load a saved model
+    train_new_model = False  # Set to False to load a saved model
 
     if train_new_model:
         scores = train_dqn(
@@ -1061,8 +1059,6 @@ if __name__ == "__main__":
             state = next_state
             score += reward
 
-            if env.root is not None:
-                env.root.update_idletasks()  # Optimized rendering
             time.sleep(0.016)  # ~60 FPS for smooth playback
 
         # Display result
