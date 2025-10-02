@@ -611,11 +611,24 @@ class DQNAgent:
         self.qnetwork_target.load_state_dict(self.qnetwork_local.state_dict())
         print(f"Target network updated at step {self.total_steps}")
 
-    def save(self, filename):
-        """Save trained model"""
+    def save(self, filename, export_onnx=False, state_dim=14):
+        """Save trained model in PyTorch format and optionally ONNX
+
+        Args:
+            filename: Path to save .pth file (e.g., 'models/my_model.pth')
+            export_onnx: Also save as ONNX with same base name
+            state_dim: State dimension for ONNX export (default 14)
+        """
+        # Save PyTorch checkpoint
         torch.save({'local_state_dict': self.qnetwork_local.state_dict(),
                     'target_state_dict': self.qnetwork_target.state_dict(),
                     'optimizer_state_dict': self.optimizer.state_dict(), 'loss_list': self.loss_list}, filename)
+
+        # Also export to ONNX if requested
+        if export_onnx:
+            # Replace .pth extension with .onnx
+            onnx_filename = filename.replace('.pth', '.onnx')
+            self.export_onnx(onnx_filename, state_dim=state_dim)
 
     def export_onnx(self, filename, state_dim=14):
         """Export model to ONNX format for deployment
@@ -980,7 +993,7 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.2, eps_end=0
                         print(
                             f"Achieved {required_perfect} consecutive evaluations with >{early_stop_threshold * 100}% success rate")
                         # Save final model before stopping (checkpoint for reference)
-                        agent.save(f'models/checkpoints/early_stop_ep{i_episode}.pth')
+                        agent.save(f'models/checkpoints/early_stop_ep{i_episode}.pth', export_onnx=True)
                         break
                 else:
                     perfect_episodes = 0
@@ -990,9 +1003,11 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.2, eps_end=0
             env.render_mode = render_mode_backup
 
     # Final model saved to checkpoints (manually copy and rename to models/ with descriptive name)
-    agent.save(f'models/checkpoints/final_ep{i_episode}.pth')
-    print(f"\n💾 Final checkpoint saved to: models/checkpoints/final_ep{i_episode}.pth")
-    print("   Manually copy to models/ with a descriptive name (e.g., 'dueling_dqn_95percent_allfish.pth')")
+    agent.save(f'models/checkpoints/final_ep{i_episode}.pth', export_onnx=True)
+    print(f"\n💾 Final checkpoint saved:")
+    print(f"   - PyTorch: models/checkpoints/final_ep{i_episode}.pth")
+    print(f"   - ONNX:    models/checkpoints/final_ep{i_episode}.onnx")
+    print("   Manually copy both to models/ with a descriptive name (e.g., 'dueling_dqn_95percent_allfish')")
 
     # Close milestone tracker and save logs
     milestone_tracker.close()
@@ -1173,11 +1188,8 @@ if __name__ == "__main__":
                     print(f"  - {m}")
             exit(1)
 
-    # Optional: Export to ONNX for deployment
-    export_to_onnx = False  # Set to True to export model to ONNX format
-    if export_to_onnx:
-        onnx_filename = 'models/fishing_agent.onnx'  # Change name as needed
-        agent.export_onnx(onnx_filename, state_dim=14)
+    # Note: ONNX export is now automatic when saving models
+    # Both .pth and .onnx files are created with the same base name
 
     # Evaluate agent performance
     print("\nRunning comprehensive evaluation...")
