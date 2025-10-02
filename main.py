@@ -148,6 +148,7 @@ class MilestoneTracker:
         self.max_win_streak = 0
         self.episode_results = []  # For CSV logging
         self.consecutive_losses = 0
+        self.prev_epsilon = 1.0  # Track previous epsilon to detect threshold crossings
 
         # Behavior tracking
         self.behavior_stats = {
@@ -191,7 +192,7 @@ class MilestoneTracker:
             print(f"{'='*60}\n")
 
             # Write to milestone log
-            with open(self.milestone_log_path, 'a') as f:
+            with open(self.milestone_log_path, 'a', encoding="utf-8") as f:
                 f.write(f"Episode {episode}: {message}\n")
 
             return True
@@ -338,19 +339,22 @@ class MilestoneTracker:
             self.check_milestone('comeback_after_5_losses', True, episode,
                                f"Epic comeback! Won after {self.consecutive_losses} consecutive losses!")
 
-        # Epsilon milestones (learning progress)
-        if epsilon < 0.5:
+        # Epsilon milestones (learning progress) - only trigger when crossing threshold
+        if self.prev_epsilon >= 0.5 and epsilon < 0.5:
             self.check_milestone('epsilon_below_0_5', True, episode,
                                f"Exploration → Exploitation: Epsilon dropped below 0.5 ({epsilon:.4f})")
-        if epsilon < 0.25:
+        if self.prev_epsilon >= 0.25 and epsilon < 0.25:
             self.check_milestone('epsilon_below_0_25', True, episode,
                                f"Mostly exploiting learned policy: Epsilon below 0.25 ({epsilon:.4f})")
-        if epsilon < 0.1:
+        if self.prev_epsilon >= 0.1 and epsilon < 0.1:
             self.check_milestone('epsilon_below_0_1', True, episode,
                                f"Expert mode: Epsilon below 0.1 ({epsilon:.4f})")
-        if epsilon < 0.01:
+        if self.prev_epsilon >= 0.01 and epsilon < 0.01:
             self.check_milestone('epsilon_below_0_01', True, episode,
                                f"Pure exploitation: Epsilon below 0.01 ({epsilon:.4f})")
+
+        # Update previous epsilon for next iteration
+        self.prev_epsilon = epsilon
 
         # Difficulty mastery milestones
         if stats['easy_success_rate'] >= 75:
@@ -929,6 +933,9 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.2, eps_end=0
     curriculum_threshold = 0.75  # 75% success rate to enable next difficulty
     difficulty_mix_ratio = 0.8  # 80% current level, 20% harder when mixing
 
+    # Behavior-balanced sampling: Each fish behavior type (sinker/dart/smooth/mixed/floater)
+    # gets equal training exposure to prevent class imbalance (e.g., rare floater fish)
+
     # For early stopping
     perfect_episodes = 0
     required_perfect = 3  # Number of consecutive evaluation rounds with near-perfect performance
@@ -967,8 +974,24 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.2, eps_end=0
         if not available_fish:  # Fallback if filter gives no fish
             available_fish = env.fish_data
 
-        # Reset environment with appropriate fish
-        fish_name = random.choice([f["name"] for f in available_fish])
+        # Behavior-balanced sampling: ensure each behavior type gets equal training time
+        behavior_types = ['sinker', 'dart', 'smooth', 'mixed', 'floater']
+
+        # Try to select from a random behavior type
+        random.shuffle(behavior_types)  # Randomize order for fallback
+        fish_name = None
+
+        for behavior_type in behavior_types:
+            # Filter available fish by behavior type
+            behavior_fish = [f for f in available_fish if f["behaviour"] == behavior_type]
+
+            if behavior_fish:
+                fish_name = random.choice([f["name"] for f in behavior_fish])
+                break
+
+        # Final fallback if somehow no fish found (shouldn't happen)
+        if fish_name is None:
+            fish_name = random.choice([f["name"] for f in available_fish])
         env.fish_name = fish_name
         state = env.reset()
 
