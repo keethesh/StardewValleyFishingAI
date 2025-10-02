@@ -22,6 +22,53 @@ print(f"Using device: {device}")
 Experience = namedtuple('Experience', ('state', 'action', 'reward', 'next_state', 'done'))
 
 
+class VectorizedEnv:
+    """Run multiple fishing environments in parallel for faster data collection"""
+
+    def __init__(self, num_envs=4, **env_kwargs):
+        """
+        Args:
+            num_envs: Number of parallel environments
+            **env_kwargs: Arguments to pass to each environment
+        """
+        self.num_envs = num_envs
+        # Disable rendering for vectorized envs
+        env_kwargs['render_mode'] = None
+        self.envs = [FishingMinigameEnv(**env_kwargs) for _ in range(num_envs)]
+        self.dones = [False] * num_envs
+
+    def reset(self):
+        """Reset all environments"""
+        states = [env.reset() for env in self.envs]
+        self.dones = [False] * self.num_envs
+        return np.array(states, dtype=np.float32)
+
+    def step(self, actions):
+        """Step all environments with given actions"""
+        results = []
+        for i, (env, action) in enumerate(zip(self.envs, actions)):
+            if self.dones[i]:
+                # Environment already done, reset it
+                state = env.reset()
+                results.append((state, 0.0, False, {}))
+            else:
+                results.append(env.step(action))
+                self.dones[i] = results[-1][2]  # Update done status
+
+        states, rewards, dones, infos = zip(*results)
+        return (
+            np.array(states, dtype=np.float32),
+            np.array(rewards, dtype=np.float32),
+            np.array(dones, dtype=bool),
+            list(infos)
+        )
+
+    def close(self):
+        """Close all environments"""
+        for env in self.envs:
+            env.close()
+
+
 class MilestoneTracker:
     """Track and log major training milestones for YouTube video storytelling"""
 
@@ -401,8 +448,23 @@ class DQNAgent:
         self.qnetwork_target.load_state_dict(self.qnetwork_local.state_dict())
         self.qnetwork_target.eval()  # Target network always in eval mode
 
+        # PyTorch 2.0+ compile optimization (if available)
+        if hasattr(torch, 'compile'):
+            try:
+                self.qnetwork_local = torch.compile(self.qnetwork_local)
+                self.qnetwork_target = torch.compile(self.qnetwork_target)
+                print("✅ PyTorch 2.0 compile optimization enabled")
+            except Exception as e:
+                print(f"⚠️  Could not enable torch.compile: {e}")
+
         self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=learning_rate)
         self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=10000, eta_min=1e-5)
+
+        # Mixed Precision Training (AMP) for speed optimization
+        self.use_amp = torch.cuda.is_available()
+        self.scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
+        if self.use_amp:
+            print("✅ Mixed Precision Training (AMP) enabled")
 
         # Prioritized replay buffer
         self.memory = PrioritizedReplayBuffer(buffer_size)
@@ -492,23 +554,48 @@ class DQNAgent:
             # Compute Q targets for current states using Bellman equation with n-step adjustment
             Q_targets = rewards + (self.gamma ** self.n_step * Q_targets_next * (1 - dones))
 
-        # Get expected Q values from local model
-        Q_expected = self.qnetwork_local(states).gather(1, actions)
+        # Forward pass with Mixed Precision if available
+        if self.use_amp:
+            with torch.cuda.amp.autocast():
+                # Get expected Q values from local model
+                Q_expected = self.qnetwork_local(states).gather(1, actions)
 
-        # Calculate TD errors for priority updates
-        td_errors = (Q_expected - Q_targets).detach().cpu().numpy()
+                # Calculate weighted loss (importance sampling)
+                loss = (is_weights * F.mse_loss(Q_expected, Q_targets, reduction='none')).mean()
 
-        # Calculate weighted loss (importance sampling)
-        loss = (is_weights * F.mse_loss(Q_expected, Q_targets, reduction='none')).mean()
+            # Calculate TD errors for priority updates (outside autocast)
+            with torch.no_grad():
+                td_errors = (Q_expected.float() - Q_targets).detach().cpu().numpy()
 
-        # Minimize the loss
-        self.optimizer.zero_grad()
-        loss.backward()
+            # Backward pass with gradient scaling
+            self.optimizer.zero_grad()
+            self.scaler.scale(loss).backward()
 
-        # Gradient clipping to prevent exploding gradients
-        torch.nn.utils.clip_grad_norm_(self.qnetwork_local.parameters(), 1)
+            # Unscale before clipping
+            self.scaler.unscale_(self.optimizer)
+            torch.nn.utils.clip_grad_norm_(self.qnetwork_local.parameters(), 1)
 
-        self.optimizer.step()
+            # Optimizer step with scaler
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+        else:
+            # Standard precision training (CPU or older GPUs)
+            Q_expected = self.qnetwork_local(states).gather(1, actions)
+
+            # Calculate TD errors for priority updates
+            td_errors = (Q_expected - Q_targets).detach().cpu().numpy()
+
+            # Calculate weighted loss (importance sampling)
+            loss = (is_weights * F.mse_loss(Q_expected, Q_targets, reduction='none')).mean()
+
+            # Minimize the loss
+            self.optimizer.zero_grad()
+            loss.backward()
+
+            # Gradient clipping to prevent exploding gradients
+            torch.nn.utils.clip_grad_norm_(self.qnetwork_local.parameters(), 1)
+
+            self.optimizer.step()
 
         # Update learning rate
         self.scheduler.step()
@@ -822,46 +909,47 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.2, eps_end=0
                     print(f"{bucket_name} ({enabled_str}): {bucket_data['success']}/{bucket_data['attempts']} "
                           f"({success_rate:.1f}%)")
 
-            # Evaluation for early stopping
-            print("\nRunning evaluation for early stopping check...")
-            env.render_mode = None  # Ensure no rendering during evaluation
-            eval_success_count = 0
-            eval_episodes = 20
+            # Evaluation for early stopping (only every 1000 episodes for speed)
+            if i_episode % 1000 == 0:
+                print("\nRunning evaluation for early stopping check...")
+                env.render_mode = None  # Ensure no rendering during evaluation
+                eval_success_count = 0
+                eval_episodes = 20
 
-            for _ in range(eval_episodes):
-                # Select random fish for evaluation
-                fish_name = random.choice(env.get_available_fish())
-                env.fish_name = fish_name
-                state = env.reset()
-                done = False
+                for _ in range(eval_episodes):
+                    # Select random fish for evaluation
+                    fish_name = random.choice(env.get_available_fish())
+                    env.fish_name = fish_name
+                    state = env.reset()
+                    done = False
 
-                for _ in range(max_t):
-                    action = agent.act(state, eps=0.0)  # No exploration during evaluation
-                    next_state, reward, done, info = env.step(action)
-                    state = next_state
+                    for _ in range(max_t):
+                        action = agent.act(state, eps=0.0)  # No exploration during evaluation
+                        next_state, reward, done, info = env.step(action)
+                        state = next_state
 
-                    if done:
-                        if env.distanceFromCatching >= 1.0:  # Success
-                            eval_success_count += 1
+                        if done:
+                            if env.distanceFromCatching >= 1.0:  # Success
+                                eval_success_count += 1
+                            break
+
+                eval_success_rate = eval_success_count / eval_episodes
+                print(f"Evaluation success rate: {eval_success_rate * 100:.1f}% ({eval_success_count}/{eval_episodes})")
+
+                # Check for early stopping
+                if eval_success_rate >= early_stop_threshold:
+                    perfect_episodes += 1
+                    print(f"Perfect evaluation round {perfect_episodes}/{required_perfect}")
+                    if perfect_episodes >= required_perfect:
+                        print(f"\n*** EARLY STOPPING at episode {i_episode} ***")
+                        print(
+                            f"Achieved {required_perfect} consecutive evaluations with >{early_stop_threshold * 100}% success rate")
+                        # Save final model before stopping
+                        agent.save('models/dqn_fishing_final.pth')
                         break
-
-            eval_success_rate = eval_success_count / eval_episodes
-            print(f"Evaluation success rate: {eval_success_rate * 100:.1f}% ({eval_success_count}/{eval_episodes})")
-
-            # Check for early stopping
-            if eval_success_rate >= early_stop_threshold:
-                perfect_episodes += 1
-                print(f"Perfect evaluation round {perfect_episodes}/{required_perfect}")
-                if perfect_episodes >= required_perfect:
-                    print(f"\n*** EARLY STOPPING at episode {i_episode} ***")
-                    print(
-                        f"Achieved {required_perfect} consecutive evaluations with >{early_stop_threshold * 100}% success rate")
-                    # Save final model before stopping
-                    agent.save('models/dqn_fishing_final.pth')
-                    break
-            else:
-                perfect_episodes = 0
-                print("Resetting perfect episode counter - continuing training")
+                else:
+                    perfect_episodes = 0
+                    print("Resetting perfect episode counter - continuing training")
 
             # Restore render mode
             env.render_mode = render_mode_backup
@@ -968,6 +1056,8 @@ def evaluate_agent(env, agent, n_episodes=20, render=True):
 
 if __name__ == "__main__":
     # Create environment and agent with optimized parameters
+    # For vectorized training (2-4x speedup), uncomment below and modify training loop:
+    # env = VectorizedEnv(num_envs=4)
     env = FishingMinigameEnv(render_mode="human")
 
     # Create agent with all improvements: Dueling DQN, Prioritized Replay, N-step returns
@@ -979,7 +1069,7 @@ if __name__ == "__main__":
         learning_rate=3e-4,
         gamma=0.99,
         buffer_size=100000,
-        batch_size=128,
+        batch_size=256,  # Increased from 128 for speed (6GB VRAM)
         update_every=4,
         n_step=3,  # 3-step returns
         target_update_freq=1000  # Hard update every 1000 steps
@@ -997,8 +1087,8 @@ if __name__ == "__main__":
             max_t=2000,                 # Maximum timesteps per episode
             eps_start=0.2,              # Start with good exploration (cosine annealing)
             eps_end=0.001,              # Lower final exploration
-            save_every=100,             # Save checkpoints frequently for YouTube milestones
-            render_every=1000           # Occasional visual check
+            save_every=500,             # Save checkpoints (optimized for speed)
+            render_every=2000           # Occasional visual check (optimized for speed)
         )
         agent.save('models/dqn_fishing_final.pth')
 
@@ -1022,8 +1112,8 @@ if __name__ == "__main__":
                 max_t=2000,
                 eps_start=0.05,             # Lower exploration (already knows basics)
                 eps_end=0.001,
-                save_every=100,
-                render_every=500
+                save_every=500,
+                render_every=1000
             )
             agent.save('models/dqn_fishing_finetuned.pth')
         else:
