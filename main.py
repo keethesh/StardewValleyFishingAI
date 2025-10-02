@@ -617,6 +617,39 @@ class DQNAgent:
                     'target_state_dict': self.qnetwork_target.state_dict(),
                     'optimizer_state_dict': self.optimizer.state_dict(), 'loss_list': self.loss_list}, filename)
 
+    def export_onnx(self, filename, state_dim=14):
+        """Export model to ONNX format for deployment
+
+        Args:
+            filename: Path to save ONNX file (e.g., 'models/model.onnx')
+            state_dim: State dimension (default 14 for current setup)
+        """
+        # Set model to eval mode
+        self.qnetwork_local.eval()
+
+        # Create dummy input (batch_size=1, state_dim)
+        dummy_input = torch.randn(1, state_dim, device=device)
+
+        # Export to ONNX
+        torch.onnx.export(
+            self.qnetwork_local,
+            dummy_input,
+            filename,
+            export_params=True,
+            opset_version=11,
+            do_constant_folding=True,
+            input_names=['state'],
+            output_names=['q_values'],
+            dynamic_axes={
+                'state': {0: 'batch_size'},
+                'q_values': {0: 'batch_size'}
+            }
+        )
+        print(f"✅ Model exported to ONNX: {filename}")
+
+        # Set back to train mode if needed
+        self.qnetwork_local.train()
+
     def load(self, filename):
         """Load trained model"""
         if torch.cuda.is_available():
@@ -1139,6 +1172,12 @@ if __name__ == "__main__":
                 for m in models:
                     print(f"  - {m}")
             exit(1)
+
+    # Optional: Export to ONNX for deployment
+    export_to_onnx = False  # Set to True to export model to ONNX format
+    if export_to_onnx:
+        onnx_filename = 'models/fishing_agent.onnx'  # Change name as needed
+        agent.export_onnx(onnx_filename, state_dim=14)
 
     # Evaluate agent performance
     print("\nRunning comprehensive evaluation...")
