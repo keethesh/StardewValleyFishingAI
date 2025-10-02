@@ -649,8 +649,10 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.2, eps_end=0
     scores = []  # list of scores from each episode
     scores_window = deque(maxlen=100)  # last 100 scores for tracking progress
 
-    # Create directory for saving models
+    # Create directories for saving models and graphs
     os.makedirs("models", exist_ok=True)
+    os.makedirs("models/checkpoints", exist_ok=True)
+    os.makedirs("training_logs/graphs", exist_ok=True)
 
     # Initialize milestone tracker for YouTube video
     milestone_tracker = MilestoneTracker(log_dir="training_logs")
@@ -835,7 +837,7 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.2, eps_end=0
 
         # Save model periodically
         if i_episode % save_every == 0:
-            checkpoint_path = f'models/dqn_fishing_episode_{i_episode}.pth'
+            checkpoint_path = f'models/checkpoints/episode_{i_episode}.pth'
             agent.save(checkpoint_path)
 
             checkpoint_time = time.time()
@@ -890,7 +892,7 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.2, eps_end=0
                     ax3.set_yscale('log')
 
             plt.tight_layout()
-            plt.savefig(f'models/training_progress_{i_episode}.png')
+            plt.savefig(f'training_logs/graphs/episode_{i_episode}.png')
             plt.close()
 
             # Print behavior success stats
@@ -944,8 +946,8 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.2, eps_end=0
                         print(f"\n*** EARLY STOPPING at episode {i_episode} ***")
                         print(
                             f"Achieved {required_perfect} consecutive evaluations with >{early_stop_threshold * 100}% success rate")
-                        # Save final model before stopping
-                        agent.save('models/dqn_fishing_final.pth')
+                        # Save final model before stopping (checkpoint for reference)
+                        agent.save(f'models/checkpoints/early_stop_ep{i_episode}.pth')
                         break
                 else:
                     perfect_episodes = 0
@@ -954,8 +956,10 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000, eps_start=0.2, eps_end=0
             # Restore render mode
             env.render_mode = render_mode_backup
 
-    # Save final model
-    agent.save('models/dqn_fishing_final.pth')
+    # Final model saved to checkpoints (manually copy and rename to models/ with descriptive name)
+    agent.save(f'models/checkpoints/final_ep{i_episode}.pth')
+    print(f"\n💾 Final checkpoint saved to: models/checkpoints/final_ep{i_episode}.pth")
+    print("   Manually copy to models/ with a descriptive name (e.g., 'dueling_dqn_95percent_allfish.pth')")
 
     # Close milestone tracker and save logs
     milestone_tracker.close()
@@ -1090,11 +1094,12 @@ if __name__ == "__main__":
             save_every=500,             # Save checkpoints (optimized for speed)
             render_every=2000           # Occasional visual check (optimized for speed)
         )
-        agent.save('models/dqn_fishing_final.pth')
+        # Training complete - manually name your model in models/ folder
 
     elif fine_tune_model:
         # Load pre-trained model and continue training (for new fish)
-        model_path = 'models/dqn_fishing_final.pth'  # Change to desired checkpoint
+        # TODO: Change to your model name in models/ folder
+        model_path = 'models/YOUR_MODEL_NAME.pth'  # ← CHANGE THIS
         if os.path.exists(model_path):
             agent.load(model_path)
             print(f"Loaded model from {model_path}")
@@ -1115,19 +1120,25 @@ if __name__ == "__main__":
                 save_every=500,
                 render_every=1000
             )
-            agent.save('models/dqn_fishing_finetuned.pth')
+            # Training complete - manually name your finetuned model in models/ folder
         else:
             print(f"Model file {model_path} not found. Cannot fine-tune.")
 
     else:
         # Load pre-trained model for evaluation only
-        model_path = 'models/dqn_fishing_final.pth'  # Change to desired model file
+        # TODO: Change to your model name in models/ folder
+        model_path = 'models/YOUR_MODEL_NAME.pth'  # ← CHANGE THIS
         if os.path.exists(model_path):
             agent.load(model_path)
             print(f"Loaded model from {model_path}")
         else:
-            print(f"Model file {model_path} not found. Training new model instead.")
-            train_new_model = True
+            print(f"Model file {model_path} not found.")
+            print("Available models in models/ folder:")
+            if os.path.exists('models'):
+                models = [f for f in os.listdir('models') if f.endswith('.pth')]
+                for m in models:
+                    print(f"  - {m}")
+            exit(1)
 
     # Evaluate agent performance
     print("\nRunning comprehensive evaluation...")
