@@ -78,24 +78,89 @@ class MilestoneTracker:
 
         # Milestone tracking
         self.milestones = {
+            # First success
             'first_success': False,
+
+            # Win streaks
             'first_win_streak_3': False,
             'first_win_streak_5': False,
             'first_win_streak_10': False,
+            'first_win_streak_25': False,
+            'first_win_streak_50': False,
+            'first_win_streak_100': False,
+
+            # Difficulty mastery
             'easy_mastery_75': False,
             'easy_mastery_90': False,
+            'easy_mastery_95': False,
             'medium_unlocked': False,
             'medium_mastery_75': False,
+            'medium_mastery_90': False,
             'hard_unlocked': False,
             'hard_mastery_75': False,
+            'hard_mastery_90': False,
+
+            # Overall performance tiers
+            'overall_50_percent': False,
+            'overall_75_percent': False,
             'overall_80_percent': False,
             'overall_90_percent': False,
+            'overall_95_percent': False,
+            'overall_99_percent': False,
+
+            # Behavior type discoveries
+            'first_sinker_catch': False,
+            'first_dart_catch': False,
+            'first_smooth_catch': False,
+            'first_mixed_catch': False,
+            'first_floater_catch': False,
+
+            # Behavior mastery
+            'sinker_mastery_80': False,
+            'dart_mastery_80': False,
+            'smooth_mastery_80': False,
+            'mixed_mastery_80': False,
+            'floater_mastery_80': False,
+
+            # Epsilon milestones (learning progress)
+            'epsilon_below_0_5': False,
+            'epsilon_below_0_25': False,
+            'epsilon_below_0_1': False,
+            'epsilon_below_0_01': False,
+
+            # Episode milestones
+            'episode_100': False,
+            'episode_500': False,
+            'episode_1000': False,
+            'episode_2500': False,
+            'episode_5000': False,
+
+            # Special achievements
+            'first_perfect_eval': False,  # 10/10 in evaluation
+            'first_flawless_20': False,   # 20+ win streak
+            'speed_demon_50': False,      # Catch in under 50 steps
+            'comeback_after_5_losses': False,
+            'all_behaviors_caught': False,  # Caught all 5 behavior types
         }
 
         # Tracking variables
         self.current_win_streak = 0
         self.max_win_streak = 0
         self.episode_results = []  # For CSV logging
+        self.consecutive_losses = 0
+
+        # Behavior tracking
+        self.behavior_stats = {
+            'sinker': {'attempts': 0, 'successes': 0},
+            'dart': {'attempts': 0, 'successes': 0},
+            'smooth': {'attempts': 0, 'successes': 0},
+            'mixed': {'attempts': 0, 'successes': 0},
+            'floater': {'attempts': 0, 'successes': 0},
+        }
+        self.behaviors_caught = set()  # Track which behaviors have been caught
+
+        # Speed tracking
+        self.shortest_catch = float('inf')
 
         # CSV setup
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -105,7 +170,9 @@ class MilestoneTracker:
         self.csv_writer.writerow([
             'Episode', 'Score', 'Success', 'Fish', 'Difficulty', 'Behavior',
             'Episode_Length', 'Epsilon', 'Win_Streak', 'Avg_Score_100',
-            'Win_Rate_100', 'Easy_Success_Rate', 'Medium_Success_Rate', 'Hard_Success_Rate'
+            'Win_Rate_100', 'Easy_Success_Rate', 'Medium_Success_Rate', 'Hard_Success_Rate',
+            'Shortest_Catch', 'Behaviors_Discovered', 'Sinker_Rate', 'Dart_Rate', 'Smooth_Rate',
+            'Mixed_Rate', 'Floater_Rate'
         ])
 
         # Milestone log file
@@ -132,12 +199,34 @@ class MilestoneTracker:
 
     def update(self, episode, score, success, fish_info, epsilon, stats):
         """Update tracking with episode results"""
-        # Update win streak
+        # Update behavior stats
+        behavior = fish_info['behavior']
+        if behavior in self.behavior_stats:
+            self.behavior_stats[behavior]['attempts'] += 1
+            if success:
+                self.behavior_stats[behavior]['successes'] += 1
+                self.behaviors_caught.add(behavior)
+
+        # Update speed tracking
+        if success and fish_info['episode_length'] < self.shortest_catch:
+            self.shortest_catch = fish_info['episode_length']
+
+        # Update win streak and loss tracking
         if success:
             self.current_win_streak += 1
             self.max_win_streak = max(self.max_win_streak, self.current_win_streak)
+            self.consecutive_losses = 0
         else:
             self.current_win_streak = 0
+            self.consecutive_losses += 1
+
+        # Calculate behavior success rates
+        behavior_rates = {}
+        for behavior_type, data in self.behavior_stats.items():
+            if data['attempts'] > 0:
+                behavior_rates[behavior_type] = (data['successes'] / data['attempts']) * 100
+            else:
+                behavior_rates[behavior_type] = 0.0
 
         # Write to CSV
         self.csv_writer.writerow([
@@ -155,13 +244,36 @@ class MilestoneTracker:
             f"{stats['easy_success_rate']:.1f}",
             f"{stats['medium_success_rate']:.1f}",
             f"{stats['hard_success_rate']:.1f}",
+            self.shortest_catch if self.shortest_catch != float('inf') else 0,
+            len(self.behaviors_caught),
+            f"{behavior_rates.get('sinker', 0):.1f}",
+            f"{behavior_rates.get('dart', 0):.1f}",
+            f"{behavior_rates.get('smooth', 0):.1f}",
+            f"{behavior_rates.get('mixed', 0):.1f}",
+            f"{behavior_rates.get('floater', 0):.1f}",
         ])
+        self.csv_file.flush()  # Ensure data is written immediately
 
-        # Check milestones
+        # === MILESTONE CHECKS ===
+
+        # Episode milestones
+        if episode == 100:
+            self.check_milestone('episode_100', True, episode, "Reached episode 100!")
+        elif episode == 500:
+            self.check_milestone('episode_500', True, episode, "Reached episode 500!")
+        elif episode == 1000:
+            self.check_milestone('episode_1000', True, episode, "Reached episode 1000!")
+        elif episode == 2500:
+            self.check_milestone('episode_2500', True, episode, "Reached episode 2500!")
+        elif episode == 5000:
+            self.check_milestone('episode_5000', True, episode, "Reached episode 5000!")
+
+        # First success
         if success:
             self.check_milestone('first_success', True, episode,
                                f"First successful catch! ({fish_info['name']})")
 
+        # Win streak milestones
         if self.current_win_streak == 3:
             self.check_milestone('first_win_streak_3', True, episode,
                                "First 3-episode win streak!")
@@ -171,6 +283,74 @@ class MilestoneTracker:
         elif self.current_win_streak == 10:
             self.check_milestone('first_win_streak_10', True, episode,
                                "First 10-episode win streak!")
+        elif self.current_win_streak == 25:
+            self.check_milestone('first_win_streak_25', True, episode,
+                               "First 25-episode win streak! 🔥")
+        elif self.current_win_streak == 50:
+            self.check_milestone('first_win_streak_50', True, episode,
+                               "First 50-episode win streak! Incredible! 🔥🔥")
+        elif self.current_win_streak == 100:
+            self.check_milestone('first_win_streak_100', True, episode,
+                               "First 100-episode win streak! LEGENDARY! 🔥🔥🔥")
+
+        # Flawless streak (20+ is special)
+        if self.current_win_streak >= 20:
+            self.check_milestone('first_flawless_20', True, episode,
+                               f"Flawless performance! {self.current_win_streak}-episode win streak!")
+
+        # Behavior discoveries
+        if success:
+            if behavior == 'sinker':
+                self.check_milestone('first_sinker_catch', True, episode,
+                                   f"First sinker fish caught! ({fish_info['name']})")
+            elif behavior == 'dart':
+                self.check_milestone('first_dart_catch', True, episode,
+                                   f"First dart fish caught! ({fish_info['name']})")
+            elif behavior == 'smooth':
+                self.check_milestone('first_smooth_catch', True, episode,
+                                   f"First smooth fish caught! ({fish_info['name']})")
+            elif behavior == 'mixed':
+                self.check_milestone('first_mixed_catch', True, episode,
+                                   f"First mixed behavior fish caught! ({fish_info['name']})")
+            elif behavior == 'floater':
+                self.check_milestone('first_floater_catch', True, episode,
+                                   f"First floater fish caught! ({fish_info['name']})")
+
+        # All behaviors caught
+        if len(self.behaviors_caught) >= 5:
+            self.check_milestone('all_behaviors_caught', True, episode,
+                               "Caught all 5 fish behavior types!")
+
+        # Behavior mastery (80%+ success rate, minimum 20 attempts)
+        for behavior_type, rate in behavior_rates.items():
+            if self.behavior_stats[behavior_type]['attempts'] >= 20 and rate >= 80:
+                milestone_key = f'{behavior_type}_mastery_80'
+                self.check_milestone(milestone_key, True, episode,
+                                   f"{behavior_type.capitalize()} fish mastered! ({rate:.1f}% success rate)")
+
+        # Speed achievements
+        if success and fish_info['episode_length'] < 50:
+            self.check_milestone('speed_demon_50', True, episode,
+                               f"Speed demon! Caught in {fish_info['episode_length']} steps! ({fish_info['name']})")
+
+        # Comeback achievement (success after 5+ consecutive losses)
+        if success and self.consecutive_losses >= 5:
+            self.check_milestone('comeback_after_5_losses', True, episode,
+                               f"Epic comeback! Won after {self.consecutive_losses} consecutive losses!")
+
+        # Epsilon milestones (learning progress)
+        if epsilon < 0.5:
+            self.check_milestone('epsilon_below_0_5', True, episode,
+                               f"Exploration → Exploitation: Epsilon dropped below 0.5 ({epsilon:.4f})")
+        if epsilon < 0.25:
+            self.check_milestone('epsilon_below_0_25', True, episode,
+                               f"Mostly exploiting learned policy: Epsilon below 0.25 ({epsilon:.4f})")
+        if epsilon < 0.1:
+            self.check_milestone('epsilon_below_0_1', True, episode,
+                               f"Expert mode: Epsilon below 0.1 ({epsilon:.4f})")
+        if epsilon < 0.01:
+            self.check_milestone('epsilon_below_0_01', True, episode,
+                               f"Pure exploitation: Epsilon below 0.01 ({epsilon:.4f})")
 
         # Difficulty mastery milestones
         if stats['easy_success_rate'] >= 75:
@@ -179,6 +359,9 @@ class MilestoneTracker:
         if stats['easy_success_rate'] >= 90:
             self.check_milestone('easy_mastery_90', True, episode,
                                f"Easy fish excellence! ({stats['easy_success_rate']:.1f}% success rate)")
+        if stats['easy_success_rate'] >= 95:
+            self.check_milestone('easy_mastery_95', True, episode,
+                               f"Easy fish domination! ({stats['easy_success_rate']:.1f}% success rate)")
 
         if stats['medium_enabled']:
             self.check_milestone('medium_unlocked', True, episode,
@@ -186,6 +369,9 @@ class MilestoneTracker:
             if stats['medium_success_rate'] >= 75:
                 self.check_milestone('medium_mastery_75', True, episode,
                                    f"Medium fish mastery! ({stats['medium_success_rate']:.1f}% success rate)")
+            if stats['medium_success_rate'] >= 90:
+                self.check_milestone('medium_mastery_90', True, episode,
+                                   f"Medium fish excellence! ({stats['medium_success_rate']:.1f}% success rate)")
 
         if stats['hard_enabled']:
             self.check_milestone('hard_unlocked', True, episode,
@@ -193,14 +379,34 @@ class MilestoneTracker:
             if stats['hard_success_rate'] >= 75:
                 self.check_milestone('hard_mastery_75', True, episode,
                                    f"Hard fish mastery! ({stats['hard_success_rate']:.1f}% success rate)")
+            if stats['hard_success_rate'] >= 90:
+                self.check_milestone('hard_mastery_90', True, episode,
+                                   f"Hard fish excellence! ({stats['hard_success_rate']:.1f}% success rate)")
 
         # Overall performance milestones
+        if stats['win_rate'] >= 50:
+            self.check_milestone('overall_50_percent', True, episode,
+                               f"Breaking even! 50% win rate achieved! ({stats['win_rate']:.1f}%)")
+        if stats['win_rate'] >= 75:
+            self.check_milestone('overall_75_percent', True, episode,
+                               f"Strong performance! 75% win rate! ({stats['win_rate']:.1f}%)")
         if stats['win_rate'] >= 80:
             self.check_milestone('overall_80_percent', True, episode,
-                               f"80% overall win rate achieved! ({stats['win_rate']:.1f}%)")
+                               f"Expert level! 80% win rate! ({stats['win_rate']:.1f}%)")
         if stats['win_rate'] >= 90:
             self.check_milestone('overall_90_percent', True, episode,
-                               f"90% overall win rate achieved! ({stats['win_rate']:.1f}%)")
+                               f"Master angler! 90% win rate! ({stats['win_rate']:.1f}%)")
+        if stats['win_rate'] >= 95:
+            self.check_milestone('overall_95_percent', True, episode,
+                               f"Elite performance! 95% win rate! ({stats['win_rate']:.1f}%)")
+        if stats['win_rate'] >= 99:
+            self.check_milestone('overall_99_percent', True, episode,
+                               f"GODLIKE! 99% win rate! ({stats['win_rate']:.1f}%)")
+
+        # Perfect evaluation (check if stats contain eval info)
+        if 'eval_success_rate' in stats and stats['eval_success_rate'] >= 100:
+            self.check_milestone('first_perfect_eval', True, episode,
+                               "Perfect evaluation! 10/10 catches!")
 
     def close(self):
         """Close CSV file"""
@@ -432,9 +638,11 @@ class DuelingDQN(nn.Module):
 class DQNAgent:
     """Agent implementing Double DQN with Dueling architecture, Prioritized Replay, and N-step returns"""
 
-    def __init__(self, state_dim=10, action_dim=2, hidden_sizes=[128, 128, 64], learning_rate=3e-4, gamma=0.99,
+    def __init__(self, state_dim=10, action_dim=2, hidden_sizes=None, learning_rate=3e-4, gamma=0.99,
                  buffer_size=100000, batch_size=128, update_every=4, n_step=3, target_update_freq=1000):
         """Initialize agent parameters and build models"""
+        if hidden_sizes is None:
+            hidden_sizes = [128, 128, 64]
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.batch_size = batch_size
@@ -449,20 +657,21 @@ class DQNAgent:
         self.qnetwork_target.eval()  # Target network always in eval mode
 
         # PyTorch 2.0+ compile optimization (if available)
-        if hasattr(torch, 'compile'):
-            try:
-                self.qnetwork_local = torch.compile(self.qnetwork_local)
-                self.qnetwork_target = torch.compile(self.qnetwork_target)
-                print("✅ PyTorch 2.0 compile optimization enabled")
-            except Exception as e:
-                print(f"⚠️  Could not enable torch.compile: {e}")
+        # Note: Disabled due to compatibility issues with Dropout layers causing access violations
+        # if hasattr(torch, 'compile'):
+        #     try:
+        #         self.qnetwork_local = torch.compile(self.qnetwork_local)
+        #         self.qnetwork_target = torch.compile(self.qnetwork_target)
+        #         print("✅ PyTorch 2.0 compile optimization enabled")
+        #     except Exception as e:
+        #         print(f"⚠️  Could not enable torch.compile: {e}")
 
         self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=learning_rate)
         self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=10000, eta_min=1e-5)
 
         # Mixed Precision Training (AMP) for speed optimization
         self.use_amp = torch.cuda.is_available()
-        self.scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
+        self.scaler = torch.amp.GradScaler('cuda') if self.use_amp else None
         if self.use_amp:
             print("✅ Mixed Precision Training (AMP) enabled")
 
@@ -556,7 +765,7 @@ class DQNAgent:
 
         # Forward pass with Mixed Precision if available
         if self.use_amp:
-            with torch.cuda.amp.autocast():
+            with torch.amp.autocast('cuda'):
                 # Get expected Q values from local model
                 Q_expected = self.qnetwork_local(states).gather(1, actions)
 
@@ -1121,14 +1330,14 @@ if __name__ == "__main__":
         learning_rate=3e-4,
         gamma=0.99,
         buffer_size=100000,
-        batch_size=256,  # Increased from 128 for speed (6GB VRAM)
+        batch_size=128,  # Increased from 128 for speed (6GB VRAM)
         update_every=4,
         n_step=3,  # 3-step returns
         target_update_freq=1000  # Hard update every 1000 steps
     )
 
     # Training modes
-    train_new_model = False  # Set to True to train from scratch
+    train_new_model = True  # Set to True to train from scratch
     fine_tune_model = False  # Set to True to continue training with new fish
 
     if train_new_model:
