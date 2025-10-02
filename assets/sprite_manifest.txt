@@ -1,0 +1,41 @@
+Stardew Valley Fishing Game Sprites
+=====================================
+
+Source: Cursors.png
+Generated sprites: 7
+
+background.png:
+  Source coordinates: (644, 1999)
+  Dimensions: 37x150 pixels
+  File: assets/background.png
+
+fish_normal.png:
+  Source coordinates: (614, 1840)
+  Dimensions: 20x20 pixels
+  File: assets/fish_normal.png
+
+fish_boss.png:
+  Source coordinates: (634, 1840)
+  Dimensions: 20x20 pixels
+  File: assets/fish_boss.png
+
+catch_bar_top.png:
+  Source coordinates: (682, 2078)
+  Dimensions: 9x2 pixels
+  File: assets/catch_bar_top.png
+
+catch_bar_mid.png:
+  Source coordinates: (682, 2081)
+  Dimensions: 9x1 pixels
+  File: assets/catch_bar_mid.png
+
+catch_bar_bot.png:
+  Source coordinates: (682, 2085)
+  Dimensions: 9x2 pixels
+  File: assets/catch_bar_bot.png
+
+handle.png:
+  Source coordinates: (257, 1990)
+  Dimensions: 5x10 pixels
+  File: assets/handle.png
+

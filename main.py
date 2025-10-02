@@ -175,7 +175,7 @@ class SumTree:
     def _propagate(self, idx, change):
         """Update tree with priority change"""
         parent = (idx - 1) // 2
-        self.tree[parent] += change
+        self.tree[parent] += float(change)
         if parent != 0:
             self._propagate(parent, change)
 
@@ -983,7 +983,7 @@ if __name__ == "__main__":
     )
 
     # Train or load model
-    train_new_model = False  # Set to False to load a saved model
+    train_new_model = True  # Set to False to load a saved model
 
     if train_new_model:
         scores = train_dqn(
