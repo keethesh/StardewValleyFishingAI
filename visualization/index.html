@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Training Visualization</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1 class="title">Stardew Valley Fishing AI</h1>
+            <p class="subtitle">Deep Q-Learning Training Visualization</p>
+        </header>
+
+        <!-- Hero Section: Milestone Timeline -->
+        <section class="hero-section">
+            <div class="timeline-container">
+                <svg id="timeline-svg" class="timeline-svg"></svg>
+                <div id="milestone-popup" class="milestone-popup hidden">
+                    <div class="popup-category"></div>
+                    <div class="popup-message"></div>
+                    <div class="popup-episode"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Metrics Grid -->
+        <section class="metrics-grid">
+            <!-- Win Rate Chart -->
+            <div class="metric-card">
+                <h3 class="card-title">Win Rate Progression</h3>
+                <svg id="winrate-svg" class="chart-svg"></svg>
+            </div>
+
+            <!-- Behavior Comparison Chart -->
+            <div class="metric-card">
+                <h3 class="card-title">Behavior Success Rates</h3>
+                <svg id="behavior-svg" class="chart-svg"></svg>
+            </div>
+
+            <!-- Stats Cards -->
+            <div class="metric-card stats-card">
+                <h3 class="card-title">Final Metrics</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value" id="final-winrate">0%</div>
+                        <div class="stat-label">Final Win Rate</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="max-streak">0</div>
+                        <div class="stat-label">Max Win Streak</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="total-episodes">0</div>
+                        <div class="stat-label">Total Episodes</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="total-milestones">0</div>
+                        <div class="stat-label">Milestones</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Playback Controls -->
+        <section class="controls">
+            <button id="play-btn" class="control-btn">
+                <span class="play-icon">▶</span>
+                <span class="pause-icon hidden">⏸</span>
+            </button>
+            <div class="speed-control">
+                <label>Speed:</label>
+                <button class="speed-btn" data-speed="0.5">0.5x</button>
+                <button class="speed-btn active" data-speed="1">1x</button>
+                <button class="speed-btn" data-speed="2">2x</button>
+            </div>
+        </section>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="animation.js"></script>
+</body>
+</html>

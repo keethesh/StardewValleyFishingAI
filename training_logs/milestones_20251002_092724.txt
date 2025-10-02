@@ -1,0 +1,39 @@
+Training Milestones Log - Started 20251002_092724
+============================================================
+
+Episode 1: Exploration → Exploitation: Epsilon dropped below 0.5 (0.2000)
+Episode 1: Mostly exploiting learned policy: Epsilon below 0.25 (0.2000)
+Episode 26: First successful catch! (Seaweed)
+Episode 26: First floater fish caught! (Seaweed)
+Episode 29: First dart fish caught! (Herring)
+Episode 38: First smooth fish caught! (Bream)
+Episode 39: First 3-episode win streak!
+Episode 42: First mixed behavior fish caught! (Sunfish)
+Episode 50: First 5-episode win streak!
+Episode 55: First 10-episode win streak!
+Episode 60: First sinker fish caught! (Sea Cucumber)
+Episode 60: Caught all 5 fish behavior types!
+Episode 76: Breaking even! 50% win rate achieved! (50.0%)
+Episode 100: Reached episode 100!
+Episode 130: Strong performance! 75% win rate! (75.0%)
+Episode 168: Expert level! 80% win rate! (80.0%)
+Episode 172: Flawless performance! 20-episode win streak!
+Episode 187: Dart fish mastered! (80.0% success rate)
+Episode 204: First 25-episode win streak! 🔥
+Episode 209: Master angler! 90% win rate! (90.0%)
+Episode 229: First 50-episode win streak! Incredible! 🔥🔥
+Episode 235: Elite performance! 95% win rate! (95.0%)
+Episode 248: Smooth fish mastered! (80.0% success rate)
+Episode 274: GODLIKE! 99% win rate! (99.0%)
+Episode 279: First 100-episode win streak! LEGENDARY! 🔥🔥🔥
+Episode 287: Sinker fish mastered! (80.0% success rate)
+Episode 289: Easy fish mastery! (75.0% success rate)
+Episode 301: Medium difficulty unlocked!
+Episode 301: Medium fish mastery! (80.8% success rate)
+Episode 314: Mixed fish mastered! (80.0% success rate)
+Episode 383: Medium fish excellence! (90.0% success rate)
+Episode 401: Hard difficulty unlocked!
+Episode 435: Hard fish mastery! (75.0% success rate)
+Episode 500: Reached episode 500!
+Episode 520: Hard fish excellence! (90.0% success rate)
+Episode 1000: Reached episode 1000!

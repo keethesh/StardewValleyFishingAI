@@ -1,0 +1,15 @@
+Training Milestones Log - Started 20251002_000646
+============================================================
+
+Episode 22: First successful catch! (Sunfish)
+Episode 27: First 3-episode win streak!
+Episode 33: First 5-episode win streak!
+Episode 38: First 10-episode win streak!
+Episode 96: Easy fish mastery! (75.0% success rate)
+Episode 102: 80% overall win rate achieved! (80.0%)
+Episode 112: 90% overall win rate achieved! (90.0%)
+Episode 201: Medium difficulty unlocked!
+Episode 201: Medium fish mastery! (100.0% success rate)
+Episode 286: Easy fish excellence! (90.0% success rate)
+Episode 501: Hard difficulty unlocked!
+Episode 501: Hard fish mastery! (100.0% success rate)
