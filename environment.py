@@ -6,7 +6,10 @@ from collections import deque
 from typing import Dict, List, Optional, Tuple, Union, Any
 
 import numpy as np
-import pygame
+try:
+    import pygame
+except ImportError:
+    pygame = None
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -80,10 +83,19 @@ class FishingMinigameEnv:
             'max_timesteps': 2000
         }
 
-        # Temporal feature tracking (for velocity/acceleration)
+        # Temporal feature tracking (for velocity/acceleration/history)
         self._state_history = deque(maxlen=3)
         self._prev_bobber_speed = 0.0
         self._prev_bar_speed = 0.0
+
+        # === ENHANCED STATE TRACKING ===
+        # Frame stacking: remember last frame's key values
+        self._prev_frame_bobber_pos = 100.0
+        self._prev_frame_bar_pos = 200.0
+        self._prev_frame_distance = 0.5
+
+        # Behavior type order for one-hot encoding
+        self.BEHAVIOR_ORDER = ['sinker', 'dart', 'smooth', 'mixed', 'floater']
 
         # Initialize Pygame if needed
         if render_mode == "human":
@@ -274,11 +286,26 @@ class FishingMinigameEnv:
         self._prev_bobber_speed = 0.0
         self._prev_bar_speed = 0.0
 
+        # === ENHANCED STATE RESET ===
+        self._prev_frame_bobber_pos = 100.0
+        self._prev_frame_bar_pos = 200.0
+        self._prev_frame_distance = 0.5
+
         # Return the initial observation
         return self._get_observation()
 
     def _get_observation(self):
-        """Convert game state to ML-friendly observation vector with temporal features."""
+        """Convert game state to ML-friendly observation vector with enhanced features.
+
+        Returns 24D observation:
+        [0-13]: Original 14 temporal features
+        [14-18]: Behavior one-hot encoding (5D)
+        [19]: Predicted fish position (1-step ahead)
+        [20]: Predicted fish position (3-step ahead)
+        [21]: Position error (distance to optimal bar pos)
+        [22]: Previous frame fish position delta
+        [23]: Previous frame bar position delta
+        """
         # Calculate accelerations (change in speed)
         bobber_acceleration = (self.bobberSpeed - self._prev_bobber_speed) / self._norm_constants['accel_norm']
         bar_acceleration = (self.bobberBarSpeed - self._prev_bar_speed) / self._norm_constants['accel_norm']
@@ -291,23 +318,65 @@ class FishingMinigameEnv:
         bar_center = self.bobberBarPos + (self.bobberBarHeight / 2.0)
         distance_to_bar = (self.bobberPosition - bar_center) / self._norm_constants['height']
 
-        # Build observation with temporal features
-        obs = np.array([
-            self.bobberPosition / self._norm_constants['height'],  # fish position
-            self.bobberSpeed / self._norm_constants['speed_norm'],  # fish speed
-            bobber_acceleration,  # NEW: fish acceleration
-            self.bobberBarPos / self._norm_constants['height'],  # bar position
-            self.bobberBarSpeed / self._norm_constants['speed_norm'],  # bar speed
-            bar_acceleration,  # NEW: bar acceleration
-            self.bobberBarHeight / self._norm_constants['height'],  # bar height
-            distance_to_bar,  # NEW: signed distance to bar center
-            float(self.bobberInBar),  # binary: fish in bar?
-            self.distanceFromCatching,  # progress toward catching (0-1)
-            self.fishSize / self._norm_constants['max_fish_size'],  # fish size
-            self.difficulty / 100.0,  # difficulty
-            float(self.motionType) / 4.0,  # motion type
-            self.current_timestep / self._norm_constants['max_timesteps'],  # time progress
-        ], dtype=np.float32)
+        # Build base observation (original 14 dimensions)
+        obs_parts = [
+            self.bobberPosition / self._norm_constants['height'],  # 0: fish position
+            self.bobberSpeed / self._norm_constants['speed_norm'],  # 1: fish speed
+            bobber_acceleration,                                    # 2: fish acceleration
+            self.bobberBarPos / self._norm_constants['height'],     # 3: bar position
+            self.bobberBarSpeed / self._norm_constants['speed_norm'], # 4: bar speed
+            bar_acceleration,                                        # 5: bar acceleration
+            self.bobberBarHeight / self._norm_constants['height'],   # 6: bar height
+            distance_to_bar,                                         # 7: distance to bar center
+            float(self.bobberInBar),                                 # 8: binary: fish in bar?
+            self.distanceFromCatching,                               # 9: progress toward catching (0-1)
+            self.fishSize / self._norm_constants['max_fish_size'],   # 10: fish size
+            self.difficulty / 100.0,                                 # 11: difficulty
+            float(self.motionType) / 4.0,                            # 12: motion type
+            self.current_timestep / self._norm_constants['max_timesteps'], # 13: time progress
+        ]
+
+        # === ENHANCED FEATURES ===
+
+        # [14-18]: Behavior one-hot encoding (5D)
+        behaviour = self.current_fish.get('behaviour', 'mixed').lower()
+        behavior_one_hot = [0.0] * 5
+        if behaviour in self.BEHAVIOR_ORDER:
+            idx = self.BEHAVIOR_ORDER.index(behaviour)
+            behavior_one_hot[idx] = 1.0
+
+        # [19]: Predicted fish position 1-step ahead
+        predicted_fish_1step = (self.bobberPosition + self.bobberSpeed + self.floaterSinkerAcceleration) / self._norm_constants['height']
+        predicted_fish_1step = np.clip(predicted_fish_1step / self._norm_constants['height'], 0.0, 1.0)
+
+        # [20]: Predicted fish position 3-step ahead (simple linear extrapolation)
+        predicted_fish_3step = (self.bobberPosition + 3 * self.bobberSpeed + 0.5 * bobber_acceleration * 9 * self._norm_constants['accel_norm']) / self._norm_constants['height']
+        predicted_fish_3step = np.clip(predicted_fish_3step, 0.0, 1.0)
+
+        # [21]: Position error - distance from optimal bar position
+        # Optimal bar position has fish in center, so error = |bar_center - fish_pos|
+        optimal_bar_center = self.bobberPosition  # Want bar centered on fish
+        position_error = (bar_center - optimal_bar_center) / self._norm_constants['height']
+
+        # [22-23]: Frame-to-frame deltas (velocity history)
+        bobber_pos_delta = (self.bobberPosition - self._prev_frame_bobber_pos) / self._norm_constants['height']
+        bar_pos_delta = (self.bobberBarPos - self._prev_frame_bar_pos) / self._norm_constants['height']
+
+        # Store current values for next frame's deltas
+        self._prev_frame_bobber_pos = self.bobberPosition
+        self._prev_frame_bar_pos = self.bobberBarPos
+        self._prev_frame_distance = self.distanceFromCatching
+
+        # Combine all features into one observation
+        obs = np.array(
+            obs_parts + behavior_one_hot + [
+                predicted_fish_1step,      # 19
+                predicted_fish_3step,      # 20
+                position_error,            # 21
+                bobber_pos_delta,          # 22
+                bar_pos_delta,             # 23
+            ], dtype=np.float32
+        )
 
         # Apply running normalization if enabled
         if self.normalize_obs:
@@ -387,21 +456,33 @@ class FishingMinigameEnv:
         return obs, reward, done, info
 
     def _calculate_reward(self, prev_distance):
-        """Calculate reward based on current state and previous state with improved shaping."""
+        """Calculate reward with enhanced shaping - addresses floater weakness and jitter."""
+        behaviour = self.current_fish.get('behaviour', 'mixed').lower()
+        bar_center = self.bobberBarPos + (self.bobberBarHeight / 2.0)
+
         # Progress reward: improvement in catching progress
         progress_reward = (self.distanceFromCatching - prev_distance) * 10.0
 
-        # Reward for keeping fish in bar WITH centering bonus
-        bar_center = self.bobberBarPos + (self.bobberBarHeight / 2.0)
-
+        # --- In-bar / centering rewards ---
         if self.bobberInBar:
-            # Base reward for being in bar
             in_bar_reward = 0.1
 
-            # NEW: Centering bonus - reward keeping fish centered in bar
-            fish_position_in_bar = abs(self.bobberPosition - bar_center) / (self.bobberBarHeight / 2.0)
-            centering_bonus = 0.15 * (1.0 - fish_position_in_bar)  # Higher bonus for center
+            # Gaussian centering bonus: smooth peak at center, drops toward edges
+            fish_position_in_bar = (self.bobberPosition - bar_center) / (self.bobberBarHeight / 2.0)
+            centering_bonus = 0.25 * np.exp(-4.0 * fish_position_in_bar ** 2)
             in_bar_reward += centering_bonus
+
+            # === FLOATER-SPECIFIC REWARD ===
+            # Floaters have passive upward movement. The agent tends to over-correct
+            # by jittering. Reward staying still when fish is already centered.
+            if behaviour == 'floater':
+                bar_speed_magnitude = abs(self.bobberBarSpeed / self._norm_constants['speed_norm'])
+                if bar_speed_magnitude < 0.05 and abs(fish_position_in_bar) < 0.3:
+                    # Bonus for smooth, minimal-action control on floaters
+                    in_bar_reward += 0.3
+                # Penalize rapid jittering on floaters
+                if bar_speed_magnitude > 0.3:
+                    in_bar_reward -= 0.1 * bar_speed_magnitude
         else:
             in_bar_reward = -0.05
             centering_bonus = 0.0
@@ -409,30 +490,30 @@ class FishingMinigameEnv:
         # Proximity reward - guide bar toward fish when not in bar
         distance_to_fish = abs(bar_center - self.bobberPosition)
         normalized_distance = distance_to_fish / self.track_height
-        proximity_reward = -0.02 * normalized_distance  # Closer is better
+        proximity_reward = -0.025 * normalized_distance
 
-        # Velocity matching reward - encourage smooth control
+        # --- Smoothness rewards ---
+        # Velocity matching: penalize mismatch between fish and bar speed
         velocity_diff = abs(self.bobberSpeed - self.bobberBarSpeed)
-        velocity_penalty = -0.005 * velocity_diff
+        velocity_penalty = -0.008 * velocity_diff
 
-        # Penalty for extreme movements (reduced weight)
+        # Action smoothness: penalize rapid bar direction changes (anti-jitter)
         movement_penalty = -0.005 * abs(self.bobberBarSpeed)
 
         # Early progress bonus - combat sparse rewards early on
         early_bonus = 0.0
         if self.distanceFromCatching < 0.3 and self.bobberInBar:
-            early_bonus = 0.05  # Extra encouragement in early stages
+            early_bonus = 0.05
 
         # Time efficiency penalty - encourages faster catches
         time_penalty = -0.01
 
         # Scale rewards based on difficulty
-        difficulty_factor = self.difficulty / 50.0  # Higher difficulty = higher rewards
+        difficulty_factor = self.difficulty / 50.0
 
         # Terminal rewards
         if self.handledFishResult:
             if self.distanceFromCatching >= 1.0:  # Success
-                # Bonus for faster catches (scaled by remaining time)
                 time_bonus = 5.0 * (1.0 - (self.current_timestep / self.max_timesteps))
                 return (10.0 * difficulty_factor + (self.fishSize / self.maxFishSize) * 10.0 + time_bonus)
             else:  # Failure
