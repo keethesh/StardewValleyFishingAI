@@ -577,7 +577,7 @@ class C51DistributionalDQN(nn.Module):
 
 def dist_projection(next_dist, rewards, dones, support, v_min, v_max, gamma, n_step):
     """
-    C51 target distribution projection.
+    C51 target distribution projection — vectorized with scatter_add.
     Projects the target distribution onto the support of the current atoms.
     """
     batch_size = next_dist.size(0)
@@ -586,36 +586,34 @@ def dist_projection(next_dist, rewards, dones, support, v_min, v_max, gamma, n_s
 
     # Compute target atom values after Bellman update
     # Tz = r + gamma^n * z  (for non-terminal states)
-    rewards_expanded = rewards.expand(-1, n_atoms)
-    dones_expanded = dones.expand(-1, n_atoms)
-    support_expanded = support.unsqueeze(0).expand(batch_size, -1)
-
-    tz = rewards_expanded + (gamma ** n_step) * support_expanded * (1.0 - dones_expanded)
+    tz = rewards + (gamma ** n_step) * support.unsqueeze(0) * (1.0 - dones)
     tz = tz.clamp(min=v_min, max=v_max)
 
-    # Project onto support atoms
-    b = (tz - v_min) / delta_z  # Continuous index of target atom
-    b_low = b.floor().clamp(0, n_atoms - 1).long()
-    b_high = b.ceil().clamp(0, n_atoms - 1).long()
+    # Normalised position of Tz in atom-space [0, n_atoms-1]
+    b = (tz - v_min) / delta_z
 
-    # Handle case where b_low == b_high
-    b_low_float = b_low.float()
-    b_high_float = b_high.float()
+    b_low = b.floor().long()
+    b_high = b.ceil().long()
 
-    # Weight proportion for lower vs upper atom
-    proportion = (b_high_float - b).clamp(0, 1)  # Weight for lower atom
+    # Clamp to valid range
+    b_low = b_low.clamp(0, n_atoms - 1)
+    b_high = b_high.clamp(0, n_atoms - 1)
 
-    # Distribute probability mass
+    # Fractional distance to lower / upper atom
+    lower_weight = (b_high.float() - b).clamp(0, 1)
+    upper_weight = (b - b_low.float()).clamp(0, 1)
+
+    # When b lands exactly on an atom (low == high), all mass goes there
+    same_atom = (b_low == b_high).float()
+    lower_proportion = lower_weight * (1 - same_atom) + same_atom  # 1.0 when exact hit
+    upper_proportion = upper_weight * (1 - same_atom)               # 0.0 when exact hit
+
+    lower_mass = next_dist * lower_proportion
+    upper_mass = next_dist * upper_proportion
+
     projected = torch.zeros_like(next_dist)
-    for i in range(batch_size):
-        for j in range(n_atoms):
-            low_idx = b_low[i, j]
-            high_idx = b_high[i, j]
-            if low_idx == high_idx:
-                projected[i, low_idx] += next_dist[i, j]
-            else:
-                projected[i, low_idx] += next_dist[i, j] * (1.0 - (b[i, j] - b_low_float[i, j]))
-                projected[i, high_idx] += next_dist[i, j] * (b[i, j] - b_low_float[i, j])
+    projected = projected.scatter_add(dim=1, index=b_low, src=lower_mass)
+    projected = projected.scatter_add(dim=1, index=b_high, src=upper_mass)
 
     return projected
 
@@ -732,6 +730,29 @@ class C51DQNAgent:
         if random.random() < eps:
             return random.choice(np.arange(self.action_dim))
         return action
+
+    def act_batch(self, states, eps=0.0):
+        """
+        Select actions for N parallel environments in one batched forward pass.
+
+        Args:
+            states: numpy array of shape (N, state_dim)
+            eps: epsilon for random exploration
+        Returns:
+            numpy array of actions of shape (N,)
+        """
+        states_t = torch.from_numpy(states).float().to(device)
+        with torch.no_grad():
+            q_values = self.qnetwork_local(states_t)
+            actions = q_values.argmax(dim=1).cpu().numpy()
+
+        # Epsilon-greedy: replace some actions with random
+        if eps > 0:
+            mask = np.random.random(len(actions)) < eps
+            if mask.any():
+                actions[mask] = np.random.randint(0, self.action_dim, size=mask.sum())
+
+        return actions
 
     def learn(self, experiences):
         """Learn from a batch using C51 distributional loss."""
@@ -1162,6 +1183,294 @@ def train_dqn(env, agent, n_episodes=10000, max_t=2000,
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+#  VECTORIZED TRAINING  (4 parallel envs — much faster on GPU)
+# ═══════════════════════════════════════════════════════════════════════════
+def train_dqn_vectorized(env_vec, agent, n_episodes=10000, max_t=2000,
+                         eps_start=0.05, eps_end=0.001,
+                         save_every=500, render_every=2000):
+    """
+    Training loop using VectorizedEnv (default 4 parallel envs).
+    Each step collects 4x the experience per wall-clock second because the
+    batched forward/backward pass leverages GPU parallelism efficiently.
+    """
+    num_envs = env_vec.num_envs
+    scores = []
+    scores_window = deque(maxlen=100)
+
+    os.makedirs("models", exist_ok=True)
+    os.makedirs("models/checkpoints", exist_ok=True)
+    os.makedirs("training_logs/graphs", exist_ok=True)
+
+    milestone_tracker = MilestoneTracker(log_dir="training_logs")
+    print(f"📊 Logging to: {milestone_tracker.csv_path}")
+    print(f"🚀 Vectorized training with {num_envs} parallel envs")
+
+    difficulty_buckets = {
+        'easy':   {'range': (0, 40),   'attempts': [0]*num_envs, 'success': [0]*num_envs, 'enabled': True},
+        'medium': {'range': (41, 70),  'attempts': [0]*num_envs, 'success': [0]*num_envs, 'enabled': False},
+        'hard':   {'range': (71, 100), 'attempts': [0]*num_envs, 'success': [0]*num_envs, 'enabled': False},
+    }
+    curriculum_threshold = 0.75
+    difficulty_mix_ratio = 0.8
+
+    behavior_types = ['sinker', 'dart', 'smooth', 'mixed', 'floater']
+    behavior_stats = {b: {"attempts": 0, "success": 0} for b in behavior_types}
+
+    floater_fish_names = [f["name"] for f in env_vec.envs[0].fish_data
+                          if f.get("behaviour", "").lower() == "floater"]
+    floater_curriculum_triggered = False
+    floater_curriculum_active = False
+    floater_curriculum_remaining = 0
+    floater_curriculum_episodes = 1000
+
+    perfect_episodes = 0
+    required_perfect = 3
+    early_stop_threshold = 0.98
+
+    training_start_time = time.time()
+    last_checkpoint_time = training_start_time
+
+    # ── Select initial fish for each env ──
+    def pick_fish_for_env(env_idx, force_floater=False):
+        env = env_vec.envs[env_idx]
+        if force_floater and floater_fish_names:
+            fn = random.choice(floater_fish_names)
+        else:
+            enabled = [b for b, info in difficulty_buckets.items() if info['enabled']]
+            if len(enabled) > 1 and random.random() > difficulty_mix_ratio:
+                bucket = enabled[-1]
+            else:
+                bucket = random.choice(enabled[:-1] if len(enabled) > 1 else enabled)
+            mn, mx = difficulty_buckets[bucket]['range']
+            avail = [f for f in env.fish_data if mn <= f["difficulty"] <= mx]
+            if not avail:
+                avail = env.fish_data
+            random.shuffle(behavior_types)
+            fn = None
+            for bt in behavior_types:
+                cands = [f["name"] for f in avail if f.get("behaviour", "").lower() == bt]
+                if cands:
+                    fn = random.choice(cands)
+                    break
+            if fn is None:
+                fn = random.choice([f["name"] for f in avail])
+        env.fish_name = fn
+        state = env.reset()
+        return state, env.current_fish['name'], env.current_fish['behaviour'], env.current_fish['difficulty']
+
+    # Initialise all envs
+    states = np.zeros((num_envs, agent.state_dim), dtype=np.float32)
+    fish_names = [''] * num_envs
+    fish_behaviors = [''] * num_envs
+    fish_difficulties = [0] * num_envs
+    env_scores = [0.0] * num_envs
+
+    for i in range(num_envs):
+        s, fn, fb, fd = pick_fish_for_env(i)
+        states[i] = s
+        fish_names[i] = fn
+        fish_behaviors[i] = fb
+        fish_difficulties[i] = fd
+
+    # Track episode count across all envs
+    episode_count = 0
+    total_steps = 0
+
+    print(f"Floater fish available: {len(floater_fish_names)} ({', '.join(floater_fish_names)})")
+    print(f"Starting vectorized training: {n_episodes} total episodes\n")
+
+    while episode_count < n_episodes:
+        eps = eps_end + (eps_start - eps_end) * (1 + np.cos(np.pi * episode_count / n_episodes)) / 2
+
+        # ── Act (batched forward pass) ──
+        actions = agent.act_batch(states, eps)
+
+        # ── Step all envs ──
+        next_states, rewards, dones, infos = env_vec.step(actions)
+        total_steps += num_envs
+
+        # ── Store experiences ──
+        for i in range(num_envs):
+            agent.step(states[i], int(actions[i]), rewards[i], next_states[i], bool(dones[i]))
+            env_scores[i] += rewards[i]
+
+            if dones[i]:
+                episode_count += 1
+                success = infos[i].get('distance_from_catching', 0) >= 1.0
+                fb = fish_behaviors[i]
+
+                behavior_stats[fb]["attempts"] += 1
+                if success:
+                    behavior_stats[fb]["success"] += 1
+
+                for bn, bd in difficulty_buckets.items():
+                    bmn, bmx = bd['range']
+                    if bmn <= fish_difficulties[i] <= bmx:
+                        bd['attempts'][i % num_envs] += 1
+                        if success:
+                            bd['success'][i % num_envs] += 1
+                        break
+
+                # Log this episode
+                scores.append(env_scores[i])
+                scores_window.append(env_scores[i])
+                avg_score = float(np.mean(scores_window)) if scores_window else 0.0
+                wr = sum(1 for s in scores[-100:] if s > 0) / min(100, len(scores)) * 100
+
+                def calc_br(name):
+                    b = difficulty_buckets[name]
+                    total_att = sum(b['attempts'])
+                    total_suc = sum(b['success'])
+                    return (total_suc / total_att * 100) if total_att > 0 else 0.0
+
+                episode_length = infos[i].get('episode_length', 0)
+                milestone_tracker.update(
+                    episode=episode_count, score=env_scores[i],
+                    success=success,
+                    fish_info={'name': fish_names[i], 'difficulty': fish_difficulties[i],
+                               'behavior': fb, 'episode_length': episode_length},
+                    epsilon=eps,
+                    stats={'avg_score': avg_score, 'win_rate': wr,
+                           'easy_success_rate': calc_br('easy'),
+                           'medium_success_rate': calc_br('medium'),
+                           'hard_success_rate': calc_br('hard'),
+                           'easy_enabled': True, 'medium_enabled': difficulty_buckets['medium']['enabled'],
+                           'hard_enabled': difficulty_buckets['hard']['enabled']}
+                )
+
+                env_scores[i] = 0.0
+
+                # Pick next fish
+                force_floater = floater_curriculum_active and floater_curriculum_remaining > 0
+                s, fn, fb, fd = pick_fish_for_env(i, force_floater=force_floater)
+                next_states[i] = s
+                fish_names[i] = fn
+                fish_behaviors[i] = fb
+                fish_difficulties[i] = fd
+
+                if force_floater:
+                    floater_curriculum_remaining -= 1
+                    if floater_curriculum_remaining == 0:
+                        floater_curriculum_active = False
+                        print("✅ Floater curriculum phase complete!")
+
+        states = next_states
+
+        # ── Curriculum advancement ──
+        if episode_count % 100 == 0 and episode_count > 100:
+            bucket_names = list(difficulty_buckets.keys())
+            for idx, (bn, bd) in enumerate(difficulty_buckets.items()):
+                if bd['enabled']:
+                    total_att = sum(bd['attempts'])
+                    total_suc = sum(bd['success'])
+                    if total_att >= 50 and total_suc / total_att >= curriculum_threshold and idx < len(bucket_names) - 1:
+                        nxt = bucket_names[idx + 1]
+                        if not difficulty_buckets[nxt]['enabled']:
+                            difficulty_buckets[nxt]['enabled'] = True
+                            print(f"\n*** Curriculum: Enabled '{nxt}' ***")
+
+            # Trigger floater curriculum
+            if wr >= 80.0 and not floater_curriculum_triggered and floater_fish_names:
+                floater_curriculum_triggered = True
+                floater_curriculum_active = True
+                floater_curriculum_remaining = floater_curriculum_episodes
+                print(f"\n{'=' * 60}")
+                print(f"🎣 FLOATER CURRICULUM: {floater_curriculum_episodes} episodes on floaters!")
+                print(f"{'=' * 60}\n")
+
+        # ── Progress ──
+        if episode_count % 100 == 0 and episode_count > 0:
+            elapsed = time.time() - training_start_time
+            h, rem = divmod(elapsed, 3600)
+            m, s = divmod(rem, 60)
+            enabled = [b for b, info in difficulty_buckets.items() if info['enabled']]
+            avg_s = float(np.mean(scores_window)) if scores_window else 0.0
+            wr = sum(1 for s in scores[-100:] if s > 0) / min(100, len(scores)) * 100 if scores else 0.0
+            print(f'Ep {episode_count}/{n_episodes} ({100*episode_count/n_episodes:.1f}%) | '
+                  f'Time: {int(h)}h {int(m)}m {int(s)}s | Steps: {total_steps} | '
+                  f'Score: {avg_s:.2f} | WR: {wr:.1f}% | {', '.join(enabled)}')
+
+            fb = behavior_stats.get('floater', {})
+            if fb.get('attempts', 0) > 0:
+                fr = fb['success'] / fb['attempts'] * 100
+                print(f'   Floater: {fb["success"]}/{fb["attempts"]} ({fr:.1f}%)')
+
+        # ── Save ──
+        if episode_count > 0 and episode_count % save_every == 0:
+            ckpt = f'models/checkpoints/episode_{episode_count}.pth'
+            agent.save(ckpt)
+            ct = time.time()
+            print(f"Saved {ckpt} ({ (ct - last_checkpoint_time) / 60:.1f} min)")
+            last_checkpoint_time = ct
+
+            # Quick plot
+            fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(20, 5))
+            ax1.plot(np.arange(len(scores)), scores, alpha=0.5)
+            if len(scores) >= 100:
+                ma = np.convolve(scores, np.ones(100) / 100, mode='valid')
+                ax1.plot(np.arange(99, len(scores)), ma, 'r-', linewidth=2)
+            ax1.set_title('Training Scores')
+            bnames, brates = [], []
+            for b, s in behavior_stats.items():
+                if s["attempts"] > 0:
+                    bnames.append(b)
+                    brates.append(s["success"] / s["attempts"] * 100)
+            ax2.bar(bnames, brates)
+            ax2.set_title('Success by Behavior')
+            ax2.set_ylim(0, 100)
+            if agent.loss_list:
+                w = min(100, len(agent.loss_list))
+                la = np.convolve(agent.loss_list, np.ones(w) / w, mode='valid')
+                ax3.plot(np.arange(w - 1, len(agent.loss_list)), la)
+                ax3.set_title('C51 Loss')
+                ax3.set_yscale('log')
+            plt.tight_layout()
+            plt.savefig(f'training_logs/graphs/episode_{episode_count}.png')
+            plt.close()
+
+        # ── Early stopping eval ──
+        if episode_count > 0 and episode_count % 1000 == 0:
+            print("\nRunning evaluation...")
+            env_vec.envs[0].render_mode = None
+            eval_success = 0
+            eval_eps = 20
+            for _ in range(eval_eps):
+                fn = random.choice(env_vec.envs[0].get_available_fish())
+                env_vec.envs[0].fish_name = fn
+                s = env_vec.envs[0].reset()
+                for _ in range(max_t):
+                    a = agent.act(s, eps=0.0)
+                    s, r, done, info = env_vec.envs[0].step(a)
+                    if done:
+                        if info.get('distance_from_catching', 0) >= 1.0:
+                            eval_success += 1
+                        break
+            eval_rate = eval_success / eval_eps
+            print(f"Eval: {eval_rate * 100:.1f}% ({eval_success}/{eval_eps})")
+            if eval_rate >= early_stop_threshold:
+                perfect_episodes += 1
+                print(f"Perfect eval {perfect_episodes}/{required_perfect}")
+                if perfect_episodes >= required_perfect:
+                    print(f"\n*** EARLY STOP at episode {episode_count} ***")
+                    agent.save(f'models/checkpoints/early_stop_ep{episode_count}.pth', export_onnx=True)
+                    break
+            else:
+                perfect_episodes = 0
+
+    # Final save
+    agent.save(f'models/checkpoints/final_ep{episode_count}.pth', export_onnx=True)
+    print(f"\n💾 Final: models/checkpoints/final_ep{episode_count}.pth")
+    milestone_tracker.close()
+
+    total = time.time() - training_start_time
+    h, rem = divmod(total, 3600)
+    m, s = divmod(rem, 60)
+    print(f"\nDone! {episode_count} episodes in {int(h)}h {int(m)}m {int(s)}s")
+    print(f"Total steps: {total_steps} ({total_steps/total:.0f} steps/sec)")
+    return scores
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 #  EVALUATION
 # ═══════════════════════════════════════════════════════════════════════════
 def evaluate_agent(env, agent, n_episodes=20, render=True):
@@ -1225,7 +1534,11 @@ def evaluate_agent(env, agent, n_episodes=20, render=True):
 #  MAIN
 # ═══════════════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
-    env = FishingMinigameEnv(render_mode="human")
+    # 4 parallel envs for vectorized training (much faster GPU utilisation)
+    env_vec = VectorizedEnv(num_envs=4, render_mode=None)
+
+    # Single env for interactive mode
+    env = env_vec.envs[0]
 
     # ── C51 Distributional DQN Agent ──
     # State dimension is now 24D (14 base + 5 behavior one-hot + 5 enhanced features)
@@ -1255,11 +1568,11 @@ if __name__ == "__main__":
     skip_evaluation = True
 
     if train_new_model:
-        scores = train_dqn(
-            env=env, agent=agent,
-            n_episodes=12000,       # Extra episodes for C51 convergence
+        scores = train_dqn_vectorized(
+            env_vec=env_vec, agent=agent,
+            n_episodes=12000,
             max_t=2000,
-            eps_start=0.05,         # Low epsilon — NoisyNet handles exploration
+            eps_start=0.05,
             eps_end=0.001,
             save_every=500,
             render_every=3000,

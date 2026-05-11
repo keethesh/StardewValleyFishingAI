@@ -96,6 +96,11 @@ class FishingMinigameEnv:
 
         # Behavior type order for one-hot encoding
         self.BEHAVIOR_ORDER = ['sinker', 'dart', 'smooth', 'mixed', 'floater']
+        self._behavior_onehot_cache = None  # Cached one-hot for current fish
+
+        # Pre-allocate observation buffer (24D) for zero-alloc _get_observation
+        self._obs_buffer = np.zeros(24, dtype=np.float32)
+        self._obs_behavior_onehot = np.zeros(5, dtype=np.float32)
 
         # Initialize Pygame if needed
         if render_mode == "human":
@@ -291,98 +296,74 @@ class FishingMinigameEnv:
         self._prev_frame_bar_pos = 200.0
         self._prev_frame_distance = 0.5
 
+        # Cache behavior one-hot for this fish
+        behaviour = self.current_fish.get('behaviour', 'mixed').lower()
+        self._behavior_onehot_cache = self._obs_behavior_onehot.copy()
+        if behaviour in self.BEHAVIOR_ORDER:
+            self._behavior_onehot_cache[self.BEHAVIOR_ORDER.index(behaviour)] = 1.0
+
         # Return the initial observation
         return self._get_observation()
 
     def _get_observation(self):
-        """Convert game state to ML-friendly observation vector with enhanced features.
+        """Convert game state to ML-friendly observation vector (24D) — zero-alloc.
 
-        Returns 24D observation:
-        [0-13]: Original 14 temporal features
-        [14-18]: Behavior one-hot encoding (5D)
-        [19]: Predicted fish position (1-step ahead)
-        [20]: Predicted fish position (3-step ahead)
-        [21]: Position error (distance to optimal bar pos)
-        [22]: Previous frame fish position delta
-        [23]: Previous frame bar position delta
+        Uses a pre-allocated buffer (_obs_buffer) to avoid creating a new
+        numpy array on every call (~6M calls during training).
         """
-        # Calculate accelerations (change in speed)
-        bobber_acceleration = (self.bobberSpeed - self._prev_bobber_speed) / self._norm_constants['accel_norm']
-        bar_acceleration = (self.bobberBarSpeed - self._prev_bar_speed) / self._norm_constants['accel_norm']
+        buf = self._obs_buffer
+        nc = self._norm_constants
 
-        # Update previous speeds for next calculation
+        # Accelerations (change in speed)
+        bobber_accel = (self.bobberSpeed - self._prev_bobber_speed) / nc['accel_norm']
+        bar_accel = (self.bobberBarSpeed - self._prev_bar_speed) / nc['accel_norm']
         self._prev_bobber_speed = self.bobberSpeed
         self._prev_bar_speed = self.bobberBarSpeed
 
-        # Calculate distance to bar center (helps agent know direction to move)
-        bar_center = self.bobberBarPos + (self.bobberBarHeight / 2.0)
-        distance_to_bar = (self.bobberPosition - bar_center) / self._norm_constants['height']
+        # Bar center & distance to it
+        bar_center = self.bobberBarPos + (self.bobberBarHeight * 0.5)
+        dist_to_bar = (self.bobberPosition - bar_center) / nc['height']
 
-        # Build base observation (original 14 dimensions)
-        obs_parts = [
-            self.bobberPosition / self._norm_constants['height'],  # 0: fish position
-            self.bobberSpeed / self._norm_constants['speed_norm'],  # 1: fish speed
-            bobber_acceleration,                                    # 2: fish acceleration
-            self.bobberBarPos / self._norm_constants['height'],     # 3: bar position
-            self.bobberBarSpeed / self._norm_constants['speed_norm'], # 4: bar speed
-            bar_acceleration,                                        # 5: bar acceleration
-            self.bobberBarHeight / self._norm_constants['height'],   # 6: bar height
-            distance_to_bar,                                         # 7: distance to bar center
-            float(self.bobberInBar),                                 # 8: binary: fish in bar?
-            self.distanceFromCatching,                               # 9: progress toward catching (0-1)
-            self.fishSize / self._norm_constants['max_fish_size'],   # 10: fish size
-            self.difficulty / 100.0,                                 # 11: difficulty
-            float(self.motionType) / 4.0,                            # 12: motion type
-            self.current_timestep / self._norm_constants['max_timesteps'], # 13: time progress
-        ]
+        # [0-13]: Base features
+        buf[0] = self.bobberPosition / nc['height']
+        buf[1] = self.bobberSpeed / nc['speed_norm']
+        buf[2] = bobber_accel
+        buf[3] = self.bobberBarPos / nc['height']
+        buf[4] = self.bobberBarSpeed / nc['speed_norm']
+        buf[5] = bar_accel
+        buf[6] = self.bobberBarHeight / nc['height']
+        buf[7] = dist_to_bar
+        buf[8] = float(self.bobberInBar)
+        buf[9] = self.distanceFromCatching
+        buf[10] = self.fishSize / nc['max_fish_size']
+        buf[11] = self.difficulty * 0.01
+        buf[12] = float(self.motionType) * 0.25
+        buf[13] = self.current_timestep / nc['max_timesteps']
 
-        # === ENHANCED FEATURES ===
-
-        # [14-18]: Behavior one-hot encoding (5D)
-        behaviour = self.current_fish.get('behaviour', 'mixed').lower()
-        behavior_one_hot = [0.0] * 5
-        if behaviour in self.BEHAVIOR_ORDER:
-            idx = self.BEHAVIOR_ORDER.index(behaviour)
-            behavior_one_hot[idx] = 1.0
+        # [14-18]: Behavior one-hot (cached on reset)
+        buf[14:19] = self._behavior_onehot_cache
 
         # [19]: Predicted fish position 1-step ahead
-        predicted_fish_1step = (self.bobberPosition + self.bobberSpeed + self.floaterSinkerAcceleration) / self._norm_constants['height']
-        predicted_fish_1step = np.clip(predicted_fish_1step / self._norm_constants['height'], 0.0, 1.0)
+        pred_1 = (self.bobberPosition + self.bobberSpeed + self.floaterSinkerAcceleration) / nc['height']
+        buf[19] = np.clip(pred_1 / nc['height'], 0.0, 1.0)
 
-        # [20]: Predicted fish position 3-step ahead (simple linear extrapolation)
-        predicted_fish_3step = (self.bobberPosition + 3 * self.bobberSpeed + 0.5 * bobber_acceleration * 9 * self._norm_constants['accel_norm']) / self._norm_constants['height']
-        predicted_fish_3step = np.clip(predicted_fish_3step, 0.0, 1.0)
+        # [20]: Predicted fish position 3-step ahead
+        pred_3 = (self.bobberPosition + 3.0 * self.bobberSpeed + 4.5 * bobber_accel * nc['accel_norm']) / nc['height']
+        buf[20] = np.clip(pred_3, 0.0, 1.0)
 
-        # [21]: Position error - distance from optimal bar position
-        # Optimal bar position has fish in center, so error = |bar_center - fish_pos|
-        optimal_bar_center = self.bobberPosition  # Want bar centered on fish
-        position_error = (bar_center - optimal_bar_center) / self._norm_constants['height']
+        # [21]: Position error (bar center relative to fish)
+        buf[21] = (bar_center - self.bobberPosition) / nc['height']
 
-        # [22-23]: Frame-to-frame deltas (velocity history)
-        bobber_pos_delta = (self.bobberPosition - self._prev_frame_bobber_pos) / self._norm_constants['height']
-        bar_pos_delta = (self.bobberBarPos - self._prev_frame_bar_pos) / self._norm_constants['height']
+        # [22-23]: Frame-to-frame deltas
+        buf[22] = (self.bobberPosition - self._prev_frame_bobber_pos) / nc['height']
+        buf[23] = (self.bobberBarPos - self._prev_frame_bar_pos) / nc['height']
 
-        # Store current values for next frame's deltas
+        # Update frame history
         self._prev_frame_bobber_pos = self.bobberPosition
         self._prev_frame_bar_pos = self.bobberBarPos
         self._prev_frame_distance = self.distanceFromCatching
 
-        # Combine all features into one observation
-        obs = np.array(
-            obs_parts + behavior_one_hot + [
-                predicted_fish_1step,      # 19
-                predicted_fish_3step,      # 20
-                position_error,            # 21
-                bobber_pos_delta,          # 22
-                bar_pos_delta,             # 23
-            ], dtype=np.float32
-        )
-
-        # Apply running normalization if enabled
-        if self.normalize_obs:
-            obs = self._normalize_observation(obs)
-
-        return obs
+        return buf
 
     def _normalize_observation(self, obs):
         """Apply running mean/std normalization to observations."""
@@ -456,122 +437,92 @@ class FishingMinigameEnv:
         return obs, reward, done, info
 
     def _calculate_reward(self, prev_distance):
-        """Calculate reward with enhanced shaping - addresses floater weakness and jitter."""
-        behaviour = self.current_fish.get('behaviour', 'mixed').lower()
-        bar_center = self.bobberBarPos + (self.bobberBarHeight / 2.0)
+        """Calculate reward with enhanced shaping — optimised local refs."""
+        bsp = self.bobberSpeed
+        bbp = self.bobberBarPos
+        bbh = self.bobberBarHeight
+        dfc = self.distanceFromCatching
+        bar_center = bbp + bbh * 0.5
 
-        # Progress reward: improvement in catching progress
-        progress_reward = (self.distanceFromCatching - prev_distance) * 10.0
+        progress_rew = (dfc - prev_distance) * 10.0
 
-        # --- In-bar / centering rewards ---
         if self.bobberInBar:
-            in_bar_reward = 0.1
-
-            # Gaussian centering bonus: smooth peak at center, drops toward edges
-            fish_position_in_bar = (self.bobberPosition - bar_center) / (self.bobberBarHeight / 2.0)
-            centering_bonus = 0.25 * np.exp(-4.0 * fish_position_in_bar ** 2)
-            in_bar_reward += centering_bonus
-
-            # === FLOATER-SPECIFIC REWARD ===
-            # Floaters have passive upward movement. The agent tends to over-correct
-            # by jittering. Reward staying still when fish is already centered.
-            if behaviour == 'floater':
-                bar_speed_magnitude = abs(self.bobberBarSpeed / self._norm_constants['speed_norm'])
-                if bar_speed_magnitude < 0.05 and abs(fish_position_in_bar) < 0.3:
-                    # Bonus for smooth, minimal-action control on floaters
-                    in_bar_reward += 0.3
-                # Penalize rapid jittering on floaters
-                if bar_speed_magnitude > 0.3:
-                    in_bar_reward -= 0.1 * bar_speed_magnitude
+            in_bar = 0.1
+            # Gaussian centering bonus
+            fpib = (self.bobberPosition - bar_center) / (bbh * 0.5)
+            in_bar += 0.25 * np.exp(-4.0 * fpib * fpib)
+            # Floater-specific: reward stillness, penalise jitter
+            if self.current_fish.get('behaviour', '').lower() == 'floater':
+                bsm = abs(bsp / self._norm_constants['speed_norm'])
+                if bsm < 0.05 and abs(fpib) < 0.3:
+                    in_bar += 0.3
+                if bsm > 0.3:
+                    in_bar -= 0.1 * bsm
         else:
-            in_bar_reward = -0.05
-            centering_bonus = 0.0
+            in_bar = -0.05
 
-        # Proximity reward - guide bar toward fish when not in bar
-        distance_to_fish = abs(bar_center - self.bobberPosition)
-        normalized_distance = distance_to_fish / self.track_height
-        proximity_reward = -0.025 * normalized_distance
+        dist_to_fish = abs(bar_center - self.bobberPosition)
+        proximity = -0.025 * (dist_to_fish / self.track_height)
+        vel_penalty = -0.008 * abs(bsp - self.bobberBarSpeed)
+        move_penalty = -0.005 * abs(self.bobberBarSpeed)
+        early = 0.05 if (dfc < 0.3 and self.bobberInBar) else 0.0
 
-        # --- Smoothness rewards ---
-        # Velocity matching: penalize mismatch between fish and bar speed
-        velocity_diff = abs(self.bobberSpeed - self.bobberBarSpeed)
-        velocity_penalty = -0.008 * velocity_diff
+        diff_fac = self.difficulty * 0.02
 
-        # Action smoothness: penalize rapid bar direction changes (anti-jitter)
-        movement_penalty = -0.005 * abs(self.bobberBarSpeed)
-
-        # Early progress bonus - combat sparse rewards early on
-        early_bonus = 0.0
-        if self.distanceFromCatching < 0.3 and self.bobberInBar:
-            early_bonus = 0.05
-
-        # Time efficiency penalty - encourages faster catches
-        time_penalty = -0.01
-
-        # Scale rewards based on difficulty
-        difficulty_factor = self.difficulty / 50.0
-
-        # Terminal rewards
         if self.handledFishResult:
-            if self.distanceFromCatching >= 1.0:  # Success
-                time_bonus = 5.0 * (1.0 - (self.current_timestep / self.max_timesteps))
-                return (10.0 * difficulty_factor + (self.fishSize / self.maxFishSize) * 10.0 + time_bonus)
-            else:  # Failure
-                return -5.0
+            if dfc >= 1.0:
+                tb = 5.0 * (1.0 - self.current_timestep / self.max_timesteps)
+                return 10.0 * diff_fac + (self.fishSize / self.maxFishSize) * 10.0 + tb
+            return -5.0
 
-        return (progress_reward + in_bar_reward + proximity_reward + velocity_penalty +
-                movement_penalty + early_bonus + time_penalty) * difficulty_factor
+        return (progress_rew + in_bar + proximity + vel_penalty + move_penalty + early - 0.01) * diff_fac
 
     def _update_game_logic(self, time_elapsed, button_pressed):
-        """Update game state based on elapsed time and inputs."""
+        """Update game state — optimised with local variable bindings."""
+        rng = self.np_random
+        diff = self.difficulty
+        motion = self.motionType
+        pos = self.bobberPosition
+        target = self.bobberTargetPosition
+
         # Attempt to set a new target occasionally
-        if (self.np_random.random() < (self.difficulty * (20.0 if self.motionType == 2 else 1.0)) / 4000.0 and (
-                self.motionType != 2 or self.bobberTargetPosition == -1.0)):
-            num1 = 548.0 - self.bobberPosition
-            bobberPos = self.bobberPosition
-            num2 = min(99.0, self.difficulty + self.np_random.randint(10, 45)) / 100.0
-            self.bobberTargetPosition = self.bobberPosition + self.np_random.randint(int(max(-bobberPos, -num1)),
-                                                                                     int(num1)) * num2
+        if rng.random() < (diff * (20.0 if motion == 2 else 1.0)) / 4000.0 and (motion != 2 or target == -1.0):
+            num1 = 548.0 - pos
+            num2 = min(99.0, diff + rng.randint(10, 45)) * 0.01
+            target = pos + rng.randint(int(max(-pos, -num1)), int(num1)) * num2
 
         # Floater/sinker adjustments
-        if self.motionType == 4:  # Floater
-            self.floaterSinkerAcceleration = max(self.floaterSinkerAcceleration - 0.01, -1.5)
-        elif self.motionType == 3:  # Sinker
-            self.floaterSinkerAcceleration = min(self.floaterSinkerAcceleration + 0.01, 1.5)
+        fa = self.floaterSinkerAcceleration
+        if motion == 4:
+            fa = max(fa - 0.01, -1.5)
+        elif motion == 3:
+            fa = min(fa + 0.01, 1.5)
+        self.floaterSinkerAcceleration = fa
 
         # Move bobber towards target
-        if abs(self.bobberPosition - self.bobberTargetPosition) > 3.0 and self.bobberTargetPosition != -1.0:
-            self.bobberAcceleration = ((self.bobberTargetPosition - self.bobberPosition) / (
-                    self.np_random.randint(10, 30) + (100.0 - min(100.0, self.difficulty))))
-            self.bobberSpeed += (self.bobberAcceleration - self.bobberSpeed) / 5.0
+        if abs(pos - target) > 3.0 and target != -1.0:
+            bobber_acc = (target - pos) / (rng.randint(10, 30) + (100.0 - min(100.0, diff)))
+            self.bobberSpeed += (bobber_acc - self.bobberSpeed) / 5.0
         else:
-            # If no target, set a random one based on difficulty
-            if self.motionType == 2 or self.np_random.random() >= self.difficulty / 2000.0:
-                self.bobberTargetPosition = -1.0
+            if motion == 2 or rng.random() >= diff / 2000.0:
+                target = -1.0
             else:
-                self.bobberTargetPosition = self.bobberPosition + (
-                    self.np_random.randint(-100, -51) if self.np_random.random() < 0.5 else self.np_random.randint(50,
-                                                                                                                   101))
+                target = pos + (rng.randint(-100, -51) if rng.random() < 0.5 else rng.randint(50, 101))
 
-        if self.motionType == 1 and self.np_random.random() < self.difficulty / 1000.0:
-            self.bobberTargetPosition = self.bobberPosition + (self.np_random.randint(-100 - int(self.difficulty) * 2,
-                                                                                      -51) if self.np_random.random() < 0.5 else self.np_random.randint(
-                50, 101 + int(self.difficulty) * 2))
+        if motion == 1 and rng.random() < diff / 1000.0:
+            spread = int(diff) * 2
+            target = pos + (rng.randint(-100 - spread, -51) if rng.random() < 0.5 else rng.randint(50, 101 + spread))
 
-        # Clamp bobber target
-        self.bobberTargetPosition = max(-1.0, min(self.bobberTargetPosition, 548.0))
+        # Clamp target
+        self.bobberTargetPosition = max(-1.0, min(target, 548.0))
 
         # Update bobber position
-        self.bobberPosition += self.bobberSpeed + self.floaterSinkerAcceleration
-        self.bobberPosition = max(0.0, min(self.bobberPosition, 532.0))
+        pos = pos + self.bobberSpeed + fa
+        self.bobberPosition = max(0.0, min(pos, 532.0))
 
-        # Check if bobber in bar - FIXED for better centering
-        fish_center = self.bobberPosition
-        bar_top = self.bobberBarPos
-        bar_bottom = self.bobberBarPos + self.bobberBarHeight
-
-        # Fish is in bar if its center is within the bar's range
-        self.bobberInBar = (fish_center >= bar_top and fish_center <= bar_bottom)
+        # Check if bobber in bar (fish centre within bar range)
+        self.bobberInBar = (self.bobberPosition >= self.bobberBarPos and
+                            self.bobberPosition <= self.bobberBarPos + self.bobberBarHeight)
 
         # Move the bobber bar based on input
         num4 = -0.25 if button_pressed else 0.25
