@@ -1561,6 +1561,20 @@ if __name__ == "__main__":
         lr_warmup_steps=1000,    # LR warmup
     )
 
+    # ── Colab / GPU adaptive settings ──
+    is_colab = 'COLAB_GPU' in os.environ or 'google.colab' in sys.modules
+    is_cuda = torch.cuda.is_available()
+    colab_batch_size = 256 if (is_cuda and is_colab) else 128
+
+    # Re-initialise agent with Colab-optimised batch size if needed
+    if is_colab and is_cuda and colab_batch_size != agent.batch_size:
+        print(f"[Colab] Adjusting batch size to {colab_batch_size} for T4 GPU")
+        agent.batch_size = colab_batch_size
+
+    if is_colab and is_cuda and agent.use_amp:
+        print("[Colab] Mixed Precision (AMP) active — T4 will be 2-3x faster")
+        print(f"[Colab] GPU: {torch.cuda.get_device_name(0)}")
+
     # Training modes
     train_new_model = True   # Set to True to train from scratch
     fine_tune_model = False
