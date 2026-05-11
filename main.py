@@ -714,7 +714,7 @@ class C51DQNAgent:
             self.loss_list.append(loss)
 
             if self.total_steps % self.target_update_freq == 0:
-                self.hard_update()
+                self.hard_update(silent=True)
 
     def act(self, state, eps=0.0):
         """
@@ -827,9 +827,10 @@ class C51DQNAgent:
 
         return loss.item()
 
-    def hard_update(self):
+    def hard_update(self, silent=True):
         self.qnetwork_target.load_state_dict(self.qnetwork_local.state_dict())
-        print(f"Target network updated at step {self.total_steps}")
+        if not silent:
+            print(f"Target network updated at step {self.total_steps}")
 
     def save(self, filename, export_onnx=False, state_dim=24):
         torch.save({
@@ -1386,8 +1387,9 @@ def train_dqn_vectorized(env_vec, agent, n_episodes=10000, max_t=2000,
             enabled = [b for b, info in difficulty_buckets.items() if info['enabled']]
             avg_s = float(np.mean(scores_window)) if scores_window else 0.0
             wr = sum(1 for s in scores[-100:] if s > 0) / min(100, len(scores)) * 100 if scores else 0.0
+            sps = total_steps / elapsed if elapsed > 0 else 0
             print(f'Ep {episode_count}/{n_episodes} ({100*episode_count/n_episodes:.1f}%) | '
-                  f'Time: {int(h)}h {int(m)}m {int(s)}s | Steps: {total_steps} | '
+                  f'{int(h)}h {int(m)}m {int(s)}s | {total_steps} steps ({sps:.0f}/s) | '
                   f'Score: {avg_s:.2f} | WR: {wr:.1f}% | {', '.join(enabled)}')
 
             fb = behavior_stats.get('floater', {})
