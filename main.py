@@ -1276,6 +1276,8 @@ def train_dqn_vectorized(env_vec, agent, n_episodes=10000, max_t=2000,
     # Track episode count across all envs
     episode_count = 0
     total_steps = 0
+    next_progress_print = 100   # Print progress at 100, 200, 300, ...
+    next_eval_print = 1000      # Evaluate at 1000, 2000, 3000, ...
 
     print(f"Floater fish available: {len(floater_fish_names)} ({', '.join(floater_fish_names)})")
     print(f"Starting vectorized training: {n_episodes} total episodes\n")
@@ -1357,8 +1359,8 @@ def train_dqn_vectorized(env_vec, agent, n_episodes=10000, max_t=2000,
 
         states = next_states
 
-        # ── Curriculum advancement ──
-        if episode_count % 100 == 0 and episode_count > 100:
+        # ── Curriculum advancement (check roughly every 100 eps) ──
+        if episode_count >= next_progress_print and episode_count > 100:
             bucket_names = list(difficulty_buckets.keys())
             for idx, (bn, bd) in enumerate(difficulty_buckets.items()):
                 if bd['enabled']:
@@ -1380,7 +1382,7 @@ def train_dqn_vectorized(env_vec, agent, n_episodes=10000, max_t=2000,
                 print(f"{'=' * 60}\n")
 
         # ── Progress ──
-        if episode_count % 100 == 0 and episode_count > 0:
+        if episode_count >= next_progress_print:
             elapsed = time.time() - training_start_time
             h, rem = divmod(elapsed, 3600)
             m, s = divmod(rem, 60)
@@ -1391,6 +1393,9 @@ def train_dqn_vectorized(env_vec, agent, n_episodes=10000, max_t=2000,
             print(f'Ep {episode_count}/{n_episodes} ({100*episode_count/n_episodes:.1f}%) | '
                   f'{int(h)}h {int(m)}m {int(s)}s | {total_steps} steps ({sps:.0f}/s) | '
                   f'Score: {avg_s:.2f} | WR: {wr:.1f}% | {', '.join(enabled)}')
+
+            # Schedule next print
+            next_progress_print += 100
 
             fb = behavior_stats.get('floater', {})
             if fb.get('attempts', 0) > 0:
@@ -1431,7 +1436,7 @@ def train_dqn_vectorized(env_vec, agent, n_episodes=10000, max_t=2000,
             plt.close()
 
         # ── Early stopping eval ──
-        if episode_count > 0 and episode_count % 1000 == 0:
+        if episode_count >= next_eval_print:
             print("\nRunning evaluation...")
             env_vec.envs[0].render_mode = None
             eval_success = 0
@@ -1458,6 +1463,7 @@ def train_dqn_vectorized(env_vec, agent, n_episodes=10000, max_t=2000,
                     break
             else:
                 perfect_episodes = 0
+            next_eval_print += 1000
 
     # Final save
     agent.save(f'models/checkpoints/final_ep{episode_count}.pth', export_onnx=True)
