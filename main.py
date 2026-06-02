@@ -1279,6 +1279,7 @@ def train_dqn_vectorized(env_vec, agent, n_episodes=10000, max_t=2000,
     total_steps = 0
     next_progress_print = 100   # Print progress at 100, 200, 300, ...
     next_eval_print = 1000      # Evaluate at 1000, 2000, 3000, ...
+    last_heartbeat_time = training_start_time  # Wall-clock heartbeat every 5 min
 
     print(f"Floater fish available: {len(floater_fish_names)} ({', '.join(floater_fish_names)})")
     print(f"Starting vectorized training: {n_episodes} total episodes\n")
@@ -1382,26 +1383,90 @@ def train_dqn_vectorized(env_vec, agent, n_episodes=10000, max_t=2000,
                 print(f"🎣 FLOATER CURRICULUM: {floater_curriculum_episodes} episodes on floaters!")
                 print(f"{'=' * 60}\n")
 
-        # ── Progress ──
+        # ── Progress (every 100 episodes) ──
         if episode_count >= next_progress_print:
-            elapsed = time.time() - training_start_time
-            h, rem = divmod(elapsed, 3600)
-            m, s = divmod(rem, 60)
+            now = time.time()
+            elapsed = now - training_start_time
+            sps = total_steps / elapsed if elapsed > 0 else 0
+            remaining_eps = max(0, n_episodes - episode_count)
+            eps_per_sec = episode_count / elapsed if elapsed > 0 else 0
+            eta_sec = remaining_eps / eps_per_sec if eps_per_sec > 0 else 0
+            eh, erm = divmod(elapsed, 3600); em, es = divmod(erm, 60)
+            rth, rtm = divmod(eta_sec, 3600); rtm, rts = divmod(rtm, 60)
             enabled = [b for b, info in difficulty_buckets.items() if info['enabled']]
             avg_s = float(np.mean(scores_window)) if scores_window else 0.0
             wr = sum(1 for s in scores[-100:] if s > 0) / min(100, len(scores)) * 100 if scores else 0.0
-            sps = total_steps / elapsed if elapsed > 0 else 0
-            print(f'Ep {episode_count}/{n_episodes} ({100*episode_count/n_episodes:.1f}%) | '
-                  f'{int(h)}h {int(m)}m {int(s)}s | {total_steps} steps ({sps:.0f}/s) | '
-                  f'Score: {avg_s:.2f} | WR: {wr:.1f}% | {', '.join(enabled)}')
+            recent_losses = agent.loss_list[-100:] if agent.loss_list else []
+            mean_loss = float(np.mean(recent_losses)) if recent_losses else 0.0
+            buf_pct = 100 * len(agent.memory) / max(1, getattr(agent.memory, 'capacity', getattr(agent.memory, 'buffer_size', 150000)))
 
-            # Schedule next print
+            # Q-value health snapshot (cheap; one forward pass on current states)
+            q_stats = ""
+            try:
+                with torch.no_grad():
+                    states_t = torch.from_numpy(states).float().to(device)
+                    qv = agent.qnetwork_local(states_t)
+                    q_stats = (f"Q-values: mean|Q|={qv.abs().mean().item():.2f}  "
+                               f"max|Q|={qv.abs().max().item():.2f}  "
+                               f"range=[{qv.min().item():+.2f}, {qv.max().item():+.2f}]")
+            except Exception:
+                pass
+
+            print()
+            print("=" * 63)
+            print(f"  Ep {episode_count}/{n_episodes} ({100*episode_count/n_episodes:5.1f}%)  "
+                  f"|  ⏱  {int(eh)}h {int(em)}m {int(es)}s elapsed  "
+                  f"|  ⏳ ETA {int(rth)}h {int(rtm)}m")
+            print(f"  📊 {total_steps:,} steps  @  {sps:.0f} steps/sec  "
+                  f"|  Epsilon: {eps:.4f}  |  Enabled: {', '.join(enabled) or 'none'}")
+            print("-" * 63)
+            print(f"  Score (100-ep avg): {avg_s:+.2f}    Win rate: {wr:5.1f}%    "
+                  f"C51 loss: {mean_loss:.3f}    Replay: {buf_pct:.1f}% full")
+            if q_stats:
+                print(f"  {q_stats}")
+            print("-" * 63)
+
+            # Per-behavior breakdown (all 5 behaviors, not just floater)
+            beh_lines = []
+            for bname in ['sinker', 'dart', 'smooth', 'mixed', 'floater']:
+                b = behavior_stats.get(bname, {})
+                att = b.get('attempts', 0)
+                suc = b.get('success', 0)
+                pct = (100 * suc / att) if att > 0 else 0.0
+                beh_lines.append(f"{bname:7s} {suc:3d}/{att:3d} ({pct:5.1f}%)")
+            # Print as 2-column layout (3 left, 2 right) to keep it narrow
+            for i in range(0, 5, 2):
+                left = beh_lines[i]
+                right = beh_lines[i + 1] if i + 1 < 5 else ""
+                print(f"    {left}    {right}")
+
+            # Per-difficulty win rates
+            diff_parts = []
+            for bname in ['easy', 'medium', 'hard']:
+                b = difficulty_buckets[bname]
+                if b['enabled']:
+                    att_total = sum(b['attempts']); suc_total = sum(b['success'])
+                    pct = (100 * suc_total / att_total) if att_total > 0 else 0.0
+                    diff_parts.append(f"{bname}: {suc_total}/{att_total} ({pct:.1f}%)")
+                else:
+                    diff_parts.append(f"{bname}: locked")
+            print(f"  By difficulty: {'   '.join(diff_parts)}")
+            print("=" * 63)
+            print()
+
             next_progress_print += 100
 
-            fb = behavior_stats.get('floater', {})
-            if fb.get('attempts', 0) > 0:
-                fr = fb['success'] / fb['attempts'] * 100
-                print(f'   Floater: {fb["success"]}/{fb["attempts"]} ({fr:.1f}%)')
+        # ── Wall-clock heartbeat (every 5 min, even between episode milestones) ──
+        now = time.time()
+        if now - last_heartbeat_time >= 300:
+            elapsed_hb = now - training_start_time
+            sps_hb = total_steps / elapsed_hb if elapsed_hb > 0 else 0
+            eps_hb = sum(1 for s in scores[-100:] if s > 0) / min(100, len(scores)) * 100 if scores else 0.0
+            loss_hb = float(np.mean(agent.loss_list[-50:])) if agent.loss_list else 0.0
+            print(f"  💓 heartbeat @ {int(elapsed_hb//60)}m  |  ep {episode_count}/{n_episodes}  "
+                  f"|  {total_steps:,} steps @ {sps_hb:.0f}/s  |  WR={eps_hb:.0f}%  "
+                  f"|  loss={loss_hb:.3f}  |  ε={eps:.3f}")
+            last_heartbeat_time = now
 
         # ── Save ──
         if episode_count > 0 and episode_count % save_every == 0:
