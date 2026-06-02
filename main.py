@@ -18,6 +18,7 @@ import csv
 import math
 import os
 import random
+import sys
 import time
 from collections import deque, namedtuple
 from datetime import datetime
@@ -1594,8 +1595,12 @@ if __name__ == "__main__":
             env_vec=env_vec, agent=agent,
             n_episodes=12000,
             max_t=2000,
-            eps_start=0.05,
-            eps_end=0.001,
+            # FIX: was 0.05 (5% random), which is 4x less exploration than the
+            # eps=0.20 (20% random) used by the Dueling DQN runs that successfully
+            # converged to 90%+ win rate. C51 needs more early exploration to
+            # discover the press/release rhythm on the larger network.
+            eps_start=0.20,
+            eps_end=0.01,
             save_every=500,
             render_every=3000,
         )

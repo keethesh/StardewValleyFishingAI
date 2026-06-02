@@ -344,8 +344,10 @@ class FishingMinigameEnv:
         buf[14:19] = self._behavior_onehot_cache
 
         # [19]: Predicted fish position 1-step ahead
+        # FIX: was divided by nc['height'] TWICE (line 347 and 348), producing a near-zero dead dimension.
+        # Only clip once; the first division already normalizes to [0, 1] for typical values.
         pred_1 = (self.bobberPosition + self.bobberSpeed + self.floaterSinkerAcceleration) / nc['height']
-        buf[19] = np.clip(pred_1 / nc['height'], 0.0, 1.0)
+        buf[19] = np.clip(pred_1, 0.0, 1.0)
 
         # [20]: Predicted fish position 3-step ahead
         pred_3 = (self.bobberPosition + 3.0 * self.bobberSpeed + 4.5 * bobber_accel * nc['accel_norm']) / nc['height']
@@ -363,7 +365,10 @@ class FishingMinigameEnv:
         self._prev_frame_bar_pos = self.bobberBarPos
         self._prev_frame_distance = self.distanceFromCatching
 
-        return buf
+        # FIX: return a copy to prevent callers from holding a live reference to _obs_buffer.
+        # Without this, the next _get_observation() call mutates previously-returned states,
+        # destroying temporal-difference learning in single-env paths (replay sees state == next_state).
+        return buf.copy()
 
     def _normalize_observation(self, obs):
         """Apply running mean/std normalization to observations."""
