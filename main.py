@@ -1283,6 +1283,7 @@ def train_dqn_vectorized(env_vec, agent, n_episodes=10000, max_t=2000,
     total_steps = 0
     next_progress_print = 100   # Print progress at 100, 200, 300, ...
     next_eval_print = 1000      # Evaluate at 1000, 2000, 3000, ...
+    next_save = save_every      # Save at save_every, 2*save_every, ...
     last_heartbeat_time = training_start_time  # Wall-clock heartbeat every 5 min
 
     print(f"Floater fish available: {len(floater_fish_names)} ({', '.join(floater_fish_names)})")
@@ -1473,7 +1474,11 @@ def train_dqn_vectorized(env_vec, agent, n_episodes=10000, max_t=2000,
             last_heartbeat_time = now
 
         # ── Save ──
-        if episode_count > 0 and episode_count % save_every == 0:
+        # Use a 'next threshold' counter (not modulo) so this fires exactly
+        # once per save boundary. Modulo would re-fire on every outer-loop
+        # iteration while episode_count sits at the boundary, producing
+        # hundreds of duplicate .pth files and killing throughput.
+        if episode_count >= next_save:
             ckpt = f'models/checkpoints/episode_{episode_count}.pth'
             agent.save(ckpt)
             ct = time.time()
@@ -1504,6 +1509,8 @@ def train_dqn_vectorized(env_vec, agent, n_episodes=10000, max_t=2000,
             plt.tight_layout()
             plt.savefig(f'training_logs/graphs/episode_{episode_count}.png')
             plt.close()
+
+            next_save += save_every
 
         # ── Early stopping eval ──
         if episode_count >= next_eval_print:
