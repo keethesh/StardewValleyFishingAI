@@ -59,7 +59,11 @@ class VectorizedEnv:
         results = []
         for i, (env, action) in enumerate(zip(self.envs, actions)):
             if self.dones[i]:
+                # Reset the env and clear the latched done flag. Without this
+                # self.dones[i] stays True forever, causing the env to be
+                # reset on every subsequent call and never actually advance.
                 state = env.reset()
+                self.dones[i] = False
                 results.append((state, 0.0, False, {}))
             else:
                 results.append(env.step(action))
