@@ -442,27 +442,37 @@ class FishingMinigameEnv:
         return obs, reward, done, info
 
     def _calculate_reward(self, prev_distance):
-        """Calculate reward with enhanced shaping — optimised local refs."""
+        """Calculate reward with enhanced shaping — optimised local refs.
+
+        Reward hierarchy (aggressive, catch-dominated):
+        1. Catch bonus dwarfs everything (~+45 to +125 by difficulty)
+        2. Per-step progress on the catch meter is the main learning signal
+        3. In-bar bonus is intentionally weak — a precondition, not a goal
+        4. Time-wasted penalty scales up at episode end (no free wiggling)
+        """
         bsp = self.bobberSpeed
         bbp = self.bobberBarPos
         bbh = self.bobberBarHeight
         dfc = self.distanceFromCatching
         bar_center = bbp + bbh * 0.5
 
-        progress_rew = (dfc - prev_distance) * 10.0
+        # Catch-meter progress is the primary per-step learning signal.
+        # 1/500 = 0.002 per in-bar step; ~3x larger than in-bar bonus.
+        progress_rew = (dfc - prev_distance) * 20.0
 
         if self.bobberInBar:
-            in_bar = 0.1
-            # Gaussian centering bonus
+            in_bar = 0.02
+            # Gaussian centering bonus — much weaker; just nudges toward center
             fpib = (self.bobberPosition - bar_center) / (bbh * 0.5)
-            in_bar += 0.25 * np.exp(-4.0 * fpib * fpib)
-            # Floater-specific: reward stillness, penalise jitter
+            in_bar += 0.05 * np.exp(-4.0 * fpib * fpib)
+            # Floater stillness: small reward, small penalty. Don't punish
+            # floaters for natural bobber drift, but still reward calm bars.
             if self.current_fish.get('behaviour', '').lower() == 'floater':
                 bsm = abs(bsp / self._norm_constants['speed_norm'])
                 if bsm < 0.05 and abs(fpib) < 0.3:
-                    in_bar += 0.3
+                    in_bar += 0.1
                 if bsm > 0.3:
-                    in_bar -= 0.1 * bsm
+                    in_bar -= 0.03 * bsm
         else:
             in_bar = -0.05
 
@@ -476,9 +486,13 @@ class FishingMinigameEnv:
 
         if self.handledFishResult:
             if dfc >= 1.0:
-                tb = 5.0 * (1.0 - self.current_timestep / self.max_timesteps)
-                return 10.0 * diff_fac + (self.fishSize / self.maxFishSize) * 10.0 + tb
-            return -5.0
+                # Catch bonus: dominant terminal reward, scales with difficulty
+                # and remaining time (faster catches worth more).
+                tb = 15.0 * (1.0 - self.current_timestep / self.max_timesteps)
+                return 50.0 * diff_fac + (self.fishSize / self.maxFishSize) * 20.0 + tb
+            # Failure: penalize time wasted — failing at step 1999 is far worse
+            # than failing at step 100. Discourages the "wiggle forever" policy.
+            return -10.0 - 15.0 * (self.current_timestep / self.max_timesteps)
 
         return (progress_rew + in_bar + proximity + vel_penalty + move_penalty + early - 0.01) * diff_fac
 
