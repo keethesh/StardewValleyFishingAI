@@ -1627,20 +1627,33 @@ if __name__ == "__main__":
 
     # ── C51 Distributional DQN Agent ──
     # State dimension is now 24D (14 base + 5 behavior one-hot + 5 enhanced features)
+    #
+    # Hyperparameter tuning (post-collapse diagnosis at ep 2300):
+    # - v_min/v_max widened to -30/50: the rebalanced reward gives +45 catch
+    #   and -25 fail. Old support [-20, 20] clipped the catch distribution at
+    #   the upper boundary, forcing probability mass to spill into the
+    #   highest atom and flattening the predicted distribution.
+    # - n_atoms raised 51 -> 101: same atom spacing (0.8) as before over
+    #   the new range, but with finer-grained distribution estimates.
+    # - learning_rate 2e-4 -> 1e-4: gentler updates on the larger network;
+    #   the Q-value collapse suggested updates were over-shooting.
+    # - target_update_freq 500 -> 1000: less frequent target refresh =
+    #   more stable Q-targets. The C51 projection amplifies target noise,
+    #   so slower target drift helps.
     agent = C51DQNAgent(
         state_dim=24,  # Updated from 14 → 24 for enhanced state
         action_dim=2,
         hidden_sizes=[256, 256, 128, 64],
-        learning_rate=2e-4,
+        learning_rate=1e-4,
         gamma=0.99,
         buffer_size=150000,      # Larger buffer for C51 (more diverse data)
         batch_size=128,
         update_every=4,
         n_step=3,
-        target_update_freq=500,  # More frequent target updates for stability
-        n_atoms=51,              # C51: 51 atoms
-        v_min=-20.0,             # Support range
-        v_max=20.0,
+        target_update_freq=1000, # Slower target drift for C51 stability
+        n_atoms=101,             # C51: 101 atoms over the wider support
+        v_min=-30.0,             # Support covers -25 fail with headroom
+        v_max=50.0,              # Support covers +45 catch with headroom
         grad_accum_steps=2,      # Gradient accumulation for stability
         weight_decay=1e-5,       # L2 regularization
         lr_warmup_steps=1000,    # LR warmup
