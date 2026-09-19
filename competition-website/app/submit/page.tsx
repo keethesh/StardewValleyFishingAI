@@ -155,13 +155,8 @@ export default function SubmitPage() {
     };
 
     return (
-        <main className="min-h-screen bg-[#090e15] text-[#f7f2ea] selection:bg-[#f7bf47] selection:text-[#24140b]">
+        <main className="min-h-screen text-[#f7f2ea]">
             <Navbar />
-
-            <div className="fixed inset-0 pointer-events-none">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(42,88,140,0.22),_transparent_40%),radial-gradient(circle_at_88%_15%,_rgba(247,191,71,0.12),_transparent_28%),linear-gradient(180deg,_#090e15_0%,_#0e1622_55%,_#070a0f_100%)]" />
-            </div>
-
             <div className="max-w-3xl mx-auto space-y-8 relative z-10 px-6 pb-24 pt-28 md:pt-32">
                 <Link href="/" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#f7bf47] hover:text-[#ffdb80] transition-colors">
                     ← Back to Companion Demo

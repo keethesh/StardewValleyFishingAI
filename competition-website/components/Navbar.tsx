@@ -31,8 +31,8 @@ export default function Navbar() {
             transition={{ duration: 0.4 }}
             className={`fixed top-0 left-0 right-0 z-50 transition-all duration-200 ${
                 scrolled 
-                    ? 'border-b-2 border-[#6b3813] bg-[#140a05]/95 py-3 shadow-[0_6px_20px_rgba(0,0,0,0.7)] backdrop-blur-md' 
-                    : 'bg-gradient-to-b from-[#0e0703]/80 to-transparent py-5'
+                    ? 'border-b-2 border-[#5c3014] bg-[#161c32]/95 py-3 shadow-[0_6px_24px_rgba(0,0,0,0.7),inset_0_-1px_0_rgba(247,191,71,0.25)] backdrop-blur-md' 
+                    : 'bg-gradient-to-b from-[#111526]/85 via-[#111526]/40 to-transparent py-5'
             }`}
         >
             <div className="max-w-6xl mx-auto px-6 flex justify-between items-center h-12">

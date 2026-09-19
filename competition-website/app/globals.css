@@ -1,14 +1,14 @@
 @import "tailwindcss";
 
 :root {
-  --background: #090e15;
-  --foreground: #f6eedf;
-  --stardew-wood-dark: #24140b;
+  --background: #111526;
+  --foreground: #f7eedb;
+  --stardew-wood-dark: #201107;
   --stardew-wood-mid: #5c3214;
-  --stardew-wood-light: #9e5b29;
-  --stardew-gold: #f6b535;
-  --stardew-parchment: #fdf6df;
-  --stardew-parchment-text: #2c1606;
+  --stardew-wood-light: #b86e33;
+  --stardew-gold: #f7bf47;
+  --stardew-parchment: #fdf7e2;
+  --stardew-parchment-text: #2a1406;
 }
 
 @theme inline {
@@ -22,22 +22,19 @@ body {
   background-color: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
-  background-image: 
-    radial-gradient(circle at 50% 0%, rgba(35, 68, 92, 0.32), transparent 45%),
-    radial-gradient(circle at 85% 15%, rgba(246, 181, 53, 0.09), transparent 28%),
-    linear-gradient(180deg, #070b10 0%, #0d1620 40%, #06090e 100%);
-  background-attachment: fixed;
+  min-height: 100vh;
 }
 
 /* Authentic Stardew Dialogue & Card Frame */
 .stardew-box {
-  background: linear-gradient(180deg, #24140b 0%, #170d07 100%);
+  background: linear-gradient(180deg, #301b0e 0%, #1c0f06 100%);
   border: 3px solid #6b3813;
   border-radius: 8px;
   box-shadow: 
-    inset 2px 2px 0px #b86e33,
-    inset -2px -2px 0px #0e0603,
-    0 8px 24px rgba(0, 0, 0, 0.6);
+    inset 2px 2px 0px #c97f32,
+    inset -2px -2px 0px #0b0402,
+    0 10px 28px rgba(0, 0, 0, 0.65),
+    0 0 20px rgba(247, 191, 71, 0.05);
   position: relative;
 }
 
@@ -128,12 +125,12 @@ body {
 
 /* Stardew Inventory / Metric Slot */
 .stardew-slot {
-  background: #110904;
-  border: 2px solid #4a270f;
-  border-radius: 4px;
+  background: #150c05;
+  border: 2px solid #4d270e;
+  border-radius: 5px;
   box-shadow: 
     inset 2px 2px 0px #070301,
-    inset -1px -1px 0px #733c16;
+    inset -1px -1px 0px #7a3f16;
 }
 
 /* Pixel Typography Utility */
@@ -163,4 +160,47 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #6e3a19;
+}
+
+/* Twilight Sky Animations */
+@keyframes twinkle {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes firefly {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.35;
+  }
+  25% {
+    transform: translate(calc(var(--tx, 30px) * 0.4), calc(var(--ty, -30px) * 0.3)) scale(1.25);
+    opacity: 0.95;
+  }
+  50% {
+    transform: translate(var(--tx, 30px), var(--ty, -30px)) scale(0.95);
+    opacity: 0.5;
+  }
+  75% {
+    transform: translate(calc(var(--tx, 30px) * 0.6), calc(var(--ty, -30px) * 0.8)) scale(1.3);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.35;
+  }
+}
+
+.animate-twinkle {
+  animation: twinkle 3.2s ease-in-out infinite;
+}
+
+.animate-firefly {
+  animation: firefly 11s ease-in-out infinite;
 }

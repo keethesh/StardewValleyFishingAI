@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Press_Start_2P } from "next/font/google";
 import "./globals.css";
+import TwilightBackground from "@/components/TwilightBackground";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -26,8 +27,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${inter.variable} ${pressStart2P.variable} antialiased bg-slate-950`}
+        className={`${inter.variable} ${pressStart2P.variable} antialiased text-[#f7eedb] selection:bg-[#f7bf47] selection:text-[#24140b] min-h-screen relative`}
       >
+        <TwilightBackground />
         {children}
       </body>
     </html>

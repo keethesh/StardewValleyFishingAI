@@ -7,13 +7,8 @@ import EvolutionShowcase from '@/components/EvolutionShowcase';
 
 export default function EvolutionPage() {
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#090e15] text-[#f7f2ea] selection:bg-[#f7bf47] selection:text-[#24140b]">
+    <main className="min-h-screen overflow-x-hidden text-[#f7f2ea]">
       <Navbar />
-
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,_rgba(42,88,140,0.22),_transparent_40%),radial-gradient(circle_at_90%_10%,_rgba(247,191,71,0.12),_transparent_28%),linear-gradient(180deg,_#090e15_0%,_#0e1622_55%,_#070a0f_100%)]" />
-      </div>
-
       <div className="relative z-10 mx-auto max-w-6xl px-6 pb-24 pt-28 md:pt-32">
         <header className="mb-12 max-w-3xl space-y-4">
           <p className="text-xs font-bold uppercase tracking-[0.34em] text-[#f7bf47]">

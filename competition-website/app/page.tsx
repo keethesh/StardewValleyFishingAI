@@ -57,15 +57,8 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#0a0f16] text-[#f7eedf] selection:bg-[#f6b535] selection:text-[#2a1407]">
+    <main className="min-h-screen overflow-x-hidden text-[#f7eedf]">
       <Navbar />
-
-      {/* Atmospheric Night Fishing Pond Background */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,_rgba(42,88,118,0.28),_transparent_48%),radial-gradient(circle_at_85%_18%,_rgba(246,181,53,0.1),_transparent_32%),linear-gradient(180deg,_#080d14_0%,_#0e1622_42%,_#070b10_100%)]" />
-        <div className="absolute inset-y-0 left-[6%] w-px bg-gradient-to-b from-transparent via-[#e09838]/10 to-transparent" />
-        <div className="absolute inset-y-0 right-[6%] w-px bg-gradient-to-b from-transparent via-[#2a5876]/20 to-transparent" />
-      </div>
 
       <div className="relative z-10 mx-auto flex max-w-6xl flex-col gap-20 px-6 pb-20 pt-28 md:pt-32">
         {/* HERO SECTION */}
