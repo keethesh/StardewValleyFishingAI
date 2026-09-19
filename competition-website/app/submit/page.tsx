@@ -6,6 +6,7 @@ import { Upload, AlertCircle, CheckCircle } from 'lucide-react';
 import { InferenceSession } from 'onnxruntime-web';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { runOfficialEvaluation } from '@/lib/simulation';
 
 function getErrorMessage(error: unknown, fallback: string) {
     return error instanceof Error ? error.message : fallback;
@@ -106,32 +107,24 @@ export default function SubmitPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!file || !modelName || !author || verificationStatus !== 'valid') return;
+        if (!file || !modelName || !author || verificationStatus !== 'valid' || !verifiedSession) return;
 
         setStatus('evaluating');
         setErrorMsg('');
         setEvalResult(null);
         setEvalProgress({
             current: 0,
-            total: 64 * 3,
-            fishName: 'Full catalog × 3 seeds…',
+            total: 25 * 3,
+            fishName: 'Starting official evaluation…',
         });
 
         try {
-            // Official: every fish × 3 seeds, fresh runSeed (not training eval seeds)
-            const form = new FormData();
-            form.append('model', file);
-
-            const evalRes = await fetch('/api/evaluate', {
-                method: 'POST',
-                body: form,
+            // Run official evaluation client-side with onnxruntime-web
+            const r = await runOfficialEvaluation(verifiedSession, {
+                onProgress: (info) => {
+                    setEvalProgress(info);
+                },
             });
-            const evalJson = await evalRes.json();
-            if (!evalRes.ok || !evalJson.success) {
-                throw new Error(evalJson.error || 'Official evaluation failed');
-            }
-
-            const r = evalJson.results as OfficialResult;
             setEvalResult(r);
             setEvalProgress({
                 current: r.episodes,

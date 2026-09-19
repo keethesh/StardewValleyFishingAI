@@ -25,9 +25,10 @@ export default function Leaderboard() {
       try {
         const res = await fetch('/api/leaderboard');
         if (res.ok) {
-          const data = await res.json();
-          if (data.entries && data.entries.length > 0) {
-            setEntries(data.entries);
+          const data = (await res.json()) as { leaderboard?: LeaderboardEntry[]; entries?: LeaderboardEntry[] };
+          const list = data.leaderboard || data.entries;
+          if (list && list.length > 0) {
+            setEntries(list);
           }
         }
       } catch {

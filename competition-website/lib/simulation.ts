@@ -8,7 +8,7 @@
 
 import { FishingGame, type Fish } from './game-logic';
 import { ALL_FISH } from './fish-data';
-import * as ort from 'onnxruntime-node';
+import * as ort from 'onnxruntime-web';
 
 export const OFFICIAL_SEEDS_PER_FISH = 3;
 export const OFFICIAL_MAX_STEPS = 2000;
@@ -41,6 +41,7 @@ export interface OfficialEvalConfig {
   maxSteps?: number;
   /** If omitted, a fresh seed is drawn each call. */
   runSeed?: number;
+  onProgress?: (info: { current: number; total: number; fishName: string }) => void;
 }
 
 function mulberry32(seed: number): () => number {
@@ -129,12 +130,14 @@ export async function runOfficialEvaluation(
 
   for (const fish of fishList) {
     let fishWeighted = 0;
-
     for (let run = 0; run < seedsPerFish; run++) {
+      config.onProgress?.({
+        current: episodes,
+        total: fishList.length * seedsPerFish,
+        fishName: `${fish.name} (seed ${run + 1}/${seedsPerFish})`,
+      });
       const seed = Math.floor(rng() * 0x7fffffff);
       const result = await runEpisode(session, fish, seed, maxSteps);
-      details.push(result);
-      episodes++;
       totalSteps += result.steps;
 
       if (result.caught) {
