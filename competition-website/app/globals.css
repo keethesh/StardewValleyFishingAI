@@ -1,8 +1,14 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #090e15;
+  --foreground: #f6eedf;
+  --stardew-wood-dark: #24140b;
+  --stardew-wood-mid: #5c3214;
+  --stardew-wood-light: #9e5b29;
+  --stardew-gold: #f6b535;
+  --stardew-parchment: #fdf6df;
+  --stardew-parchment-text: #2c1606;
 }
 
 @theme inline {
@@ -12,42 +18,149 @@
   --font-pixel: var(--font-pixel);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(35, 68, 92, 0.32), transparent 45%),
+    radial-gradient(circle at 85% 15%, rgba(246, 181, 53, 0.09), transparent 28%),
+    linear-gradient(180deg, #070b10 0%, #0d1620 40%, #06090e 100%);
+  background-attachment: fixed;
 }
 
-/* Custom Scrollbar */
+/* Authentic Stardew Dialogue & Card Frame */
+.stardew-box {
+  background: linear-gradient(180deg, #24140b 0%, #170d07 100%);
+  border: 3px solid #6b3813;
+  border-radius: 8px;
+  box-shadow: 
+    inset 2px 2px 0px #b86e33,
+    inset -2px -2px 0px #0e0603,
+    0 8px 24px rgba(0, 0, 0, 0.6);
+  position: relative;
+}
+
+/* Stardew Parchment Paper Panel */
+.stardew-parchment {
+  background: #fbf5df;
+  color: #2c1606;
+  border: 3px solid #6e3d19;
+  border-radius: 6px;
+  box-shadow: 
+    inset 2px 2px 0px #ffffff,
+    inset -2px -2px 0px #c9a473,
+    0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* Chunky 3D Stardew Gold Button */
+.stardew-btn-gold {
+  background: linear-gradient(180deg, #f7bf47 0%, #ea9e26 100%);
+  color: #2b1404;
+  font-weight: 700;
+  border: 2px solid #542704;
+  border-radius: 6px;
+  box-shadow: 
+    inset 1px 1px 0px #ffeaa3,
+    inset -1px -1px 0px #aa670b,
+    0 4px 0px #381a02;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.stardew-btn-gold:hover {
+  background: linear-gradient(180deg, #fed066 0%, #f4aa35 100%);
+  transform: translateY(-1px);
+  box-shadow: 
+    inset 1px 1px 0px #fff2bf,
+    inset -1px -1px 0px #aa670b,
+    0 5px 0px #381a02;
+}
+
+.stardew-btn-gold:active {
+  transform: translateY(3px);
+  box-shadow: 
+    inset 1px 1px 0px #854b03,
+    inset -1px -1px 0px #fed777,
+    0 1px 0px #381a02;
+}
+
+/* Chunky Stardew Wood / Secondary Button */
+.stardew-btn-wood {
+  background: linear-gradient(180deg, #442410 0%, #291508 100%);
+  color: #fce3a6;
+  font-weight: 600;
+  border: 2px solid #5a3014;
+  border-radius: 6px;
+  box-shadow: 
+    inset 1px 1px 0px #82471d,
+    inset -1px -1px 0px #130903,
+    0 4px 0px #0b0502;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.stardew-btn-wood:hover {
+  background: linear-gradient(180deg, #572e15 0%, #351c0b 100%);
+  color: #fff2cc;
+  transform: translateY(-1px);
+  box-shadow: 
+    inset 1px 1px 0px #995524,
+    inset -1px -1px 0px #130903,
+    0 5px 0px #0b0502;
+}
+
+.stardew-btn-wood:active {
+  transform: translateY(3px);
+  box-shadow: 
+    inset 1px 1px 0px #130903,
+    inset -1px -1px 0px #703c17,
+    0 1px 0px #0b0502;
+}
+
+/* Stardew Inventory / Metric Slot */
+.stardew-slot {
+  background: #110904;
+  border: 2px solid #4a270f;
+  border-radius: 4px;
+  box-shadow: 
+    inset 2px 2px 0px #070301,
+    inset -1px -1px 0px #733c16;
+}
+
+/* Pixel Typography Utility */
+.font-pixel {
+  font-family: var(--font-pixel), monospace;
+  letter-spacing: -0.02em;
+}
+
+.text-pixel {
+  font-family: var(--font-pixel), monospace;
+}
+
+/* Custom Scrollbar - Warm Wood */
 ::-webkit-scrollbar {
   width: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #020617;
+  background: #110904;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
-  border-radius: 5px;
+  background: #522c12;
+  border: 1px solid #7d441c;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
-}
-
-/* Utilities */
-.glass-panel {
-  @apply bg-slate-900/60 backdrop-blur-md border border-white/10 shadow-xl;
-}
-
-.text-pixel {
-  font-family: var(--font-pixel);
+  background: #6e3a19;
 }

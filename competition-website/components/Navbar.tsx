@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { COMPETITION_CONFIG } from '@/lib/competition-config';
 
 export default function Navbar() {
@@ -27,31 +28,53 @@ export default function Navbar() {
         <motion.nav
             initial={{ y: -100 }}
             animate={{ y: 0 }}
-            transition={{ duration: 0.5 }}
-            className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'border-b border-white/10 bg-slate-950/80 py-4 backdrop-blur-md' : 'bg-transparent py-6'
-                }`}
+            transition={{ duration: 0.4 }}
+            className={`fixed top-0 left-0 right-0 z-50 transition-all duration-200 ${
+                scrolled 
+                    ? 'border-b-2 border-[#6b3813] bg-[#140a05]/95 py-3 shadow-[0_6px_20px_rgba(0,0,0,0.7)] backdrop-blur-md' 
+                    : 'bg-gradient-to-b from-[#0e0703]/80 to-transparent py-5'
+            }`}
         >
-            <div className="max-w-6xl mx-auto px-6 flex justify-between items-center">
-                <div
-                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                    className="flex items-center gap-2 cursor-pointer group"
+            <div className="max-w-6xl mx-auto px-6 flex justify-between items-center h-12">
+                <Link
+                    href="/"
+                    className="flex items-center gap-3 cursor-pointer group"
                 >
                     <span className="text-2xl transition-transform group-hover:scale-110">🎣</span>
-                    <span className="text-lg font-semibold tracking-tight text-stone-100">
-                        Stardew Fishing AI
-                    </span>
-                </div>
+                    <div className="flex flex-col">
+                        <span className="font-pixel text-sm font-bold tracking-tight text-[#f6b535] drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                            Stardew Fishing AI
+                        </span>
+                        <span className="text-[10px] text-amber-200/60 font-mono -mt-0.5">
+                            video companion
+                        </span>
+                    </div>
+                </Link>
 
-                <div className="hidden md:flex items-center gap-8 text-sm font-medium text-stone-300">
-                    <a href="/play" className="transition-colors hover:text-white">Play</a>
-                    <a href="/evolution" className="transition-colors hover:text-white">Evolution</a>
-                    <button onClick={() => scrollToSection('challenge')} className="transition-colors hover:text-white">Challenge</button>
-                    <button onClick={() => scrollToSection('leaderboard')} className="transition-colors hover:text-white">Leaderboard</button>
+                <div className="hidden md:flex items-center gap-7 text-sm font-medium text-stone-300">
+                    <Link href="/play" className="transition-colors hover:text-[#f6b535]">
+                        Play Live
+                    </Link>
+                    <Link href="/evolution" className="transition-colors hover:text-[#f6b535]">
+                        AI Evolution
+                    </Link>
+                    <button 
+                        onClick={() => scrollToSection('challenge')} 
+                        className="transition-colors hover:text-[#f6b535] cursor-pointer"
+                    >
+                        $10 Bounty
+                    </button>
+                    <button 
+                        onClick={() => scrollToSection('leaderboard')} 
+                        className="transition-colors hover:text-[#f6b535] cursor-pointer"
+                    >
+                        Leaderboard
+                    </button>
                     <a
                         href={videoUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-teal-200 transition-colors hover:text-white"
+                        className="text-amber-300/90 transition-colors hover:text-amber-200 font-medium"
                     >
                         Watch Video
                     </a>
@@ -61,7 +84,7 @@ export default function Navbar() {
                     href={COMPETITION_CONFIG.githubRepo}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="rounded-full bg-amber-300 px-5 py-2 text-sm font-semibold text-slate-950 transition-transform hover:-translate-y-0.5"
+                    className="stardew-btn-gold px-4 py-2 text-xs font-bold tracking-wide"
                 >
                     Starter Repo
                 </a>

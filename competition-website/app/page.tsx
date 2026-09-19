@@ -15,33 +15,33 @@ import * as ort from 'onnxruntime-web';
 ort.env.wasm.wasmPaths = '/wasm/';
 
 const HERO_FACTS = [
-  'The same model featured in the video',
-  'Playable in your browser with no setup',
-  'Starter repo included if you want to train your own',
+  'Exact model featured in the YouTube breakdown',
+  'Runs in-browser via WebAssembly with zero setup',
+  'Colab starter included to train your own network',
 ];
 
 const QUICK_CONTEXT = [
   {
     label: 'Observation',
-    value: '8 numbers',
-    description: 'A compact snapshot of the fish, bar, velocity, and catch progress.',
+    value: '8 floats',
+    description: 'Compact vector: bobber pos/vel, bar pos/vel, bar height, relative distance, in-bar flag, and catch progress.',
   },
   {
     label: 'Action',
-    value: 'Press or release',
-    description: 'Every frame the model decides whether to hold the button or let go.',
+    value: 'Binary',
+    description: 'Every 16ms frame, the neural net chooses whether to apply upward thrust or release to gravity.',
   },
   {
-    label: 'Format',
-    value: 'ONNX',
-    description: 'The browser demo and challenge both use the same exported model format.',
+    label: 'Architecture',
+    value: 'Dueling DQN',
+    description: 'Separates state value V(s) from action advantage A(s,a) with 3-step temporal-difference returns.',
   },
 ];
 
 const CHALLENGE_STEPS = [
-  'Clone the starter repo and train on the same fishing environment from the video.',
-  'Export your model to ONNX so it can run in the browser and in the evaluation pipeline.',
-  'Submit it to the challenge and see if you can beat the benchmark model.',
+  'Open the free 1-click Google Colab and train an 8-D Dueling DQN on 4 parallel environments.',
+  'Export the checkpoint to a verified .onnx model in one click (~56 KB).',
+  'Drop your model into the challenge evaluator to compete for the $10 bounty.',
 ];
 
 export default function Home() {
@@ -57,380 +57,396 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-slate-950 text-stone-100 selection:bg-amber-300 selection:text-slate-950">
+    <main className="min-h-screen overflow-x-hidden bg-[#0a0f16] text-[#f7eedf] selection:bg-[#f6b535] selection:text-[#2a1407]">
       <Navbar />
 
+      {/* Atmospheric Night Fishing Pond Background */}
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(45,212,191,0.12),_transparent_36%),radial-gradient(circle_at_88%_15%,_rgba(251,191,36,0.12),_transparent_24%),linear-gradient(180deg,_#071118_0%,_#05070a_52%,_#020304_100%)]" />
-        <div className="absolute inset-y-0 left-[8%] w-px bg-gradient-to-b from-transparent via-white/8 to-transparent" />
-        <div className="absolute inset-y-0 right-[10%] w-px bg-gradient-to-b from-transparent via-white/6 to-transparent" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,_rgba(42,88,118,0.28),_transparent_48%),radial-gradient(circle_at_85%_18%,_rgba(246,181,53,0.1),_transparent_32%),linear-gradient(180deg,_#080d14_0%,_#0e1622_42%,_#070b10_100%)]" />
+        <div className="absolute inset-y-0 left-[6%] w-px bg-gradient-to-b from-transparent via-[#e09838]/10 to-transparent" />
+        <div className="absolute inset-y-0 right-[6%] w-px bg-gradient-to-b from-transparent via-[#2a5876]/20 to-transparent" />
       </div>
 
-      <div className="relative z-10 mx-auto flex max-w-6xl flex-col gap-24 px-6 pb-16 pt-28 md:pt-32">
-        <section className="grid gap-14 lg:grid-cols-[1.25fr_0.75fr] lg:items-start">
-          <div className="space-y-8">
-            <motion.p
-              initial={{ opacity: 0, y: 16 }}
+      <div className="relative z-10 mx-auto flex max-w-6xl flex-col gap-20 px-6 pb-20 pt-28 md:pt-32">
+        {/* HERO SECTION */}
+        <section className="grid gap-12 lg:grid-cols-[1.25fr_0.75fr] lg:items-center">
+          <div className="space-y-7">
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="text-xs font-semibold uppercase tracking-[0.34em] text-amber-200/80"
+              transition={{ duration: 0.4 }}
+              className="inline-flex items-center gap-2 rounded-full border border-[#f6b535]/30 bg-[#24140b]/80 px-4 py-1.5 backdrop-blur-sm"
             >
-              Companion site for the video
-            </motion.p>
+              <span className="text-sm">🌟</span>
+              <span className="font-pixel text-[11px] font-bold uppercase tracking-wider text-[#f6b535]">
+                Companion to the YouTube Breakdown
+              </span>
+            </motion.div>
 
             <motion.h1
-              initial={{ opacity: 0, y: 24 }}
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, ease: 'easeOut' }}
-              className="max-w-4xl text-4xl leading-[1.08] text-stone-50 sm:text-5xl lg:text-6xl"
+              transition={{ duration: 0.6, ease: 'easeOut' }}
+              className="max-w-4xl text-3xl font-extrabold leading-[1.12] text-stone-50 sm:text-5xl lg:text-6xl tracking-tight"
             >
-              I trained an AI to master Stardew Valley fishing.
+              I trained an AI to master{' '}
+              <span className="text-[#f6b535] drop-shadow-[0_2px_10px_rgba(246,181,53,0.3)]">
+                Stardew Valley
+              </span>{' '}
+              fishing.
             </motion.h1>
 
             <motion.p
-              initial={{ opacity: 0, y: 24 }}
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1, duration: 0.7, ease: 'easeOut' }}
-              className="max-w-2xl text-lg leading-8 text-stone-300/85"
+              transition={{ delay: 0.1, duration: 0.6, ease: 'easeOut' }}
+              className="max-w-2xl text-base sm:text-lg leading-relaxed text-stone-300"
             >
-              The video tells the story. This page is where you can try the result: watch the model
-              fish live, take over the minigame yourself, or grab the starter repo and train one that
-              can beat it.
+              Stardew fishing is notoriously brutal. Watch the neural network conquer
+              the minigame in real time, take over the controls yourself, or train your
+              own model on Google Colab to beat the baseline for the $10 bounty.
             </motion.p>
 
             <motion.div
-              initial={{ opacity: 0, y: 18 }}
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2, duration: 0.6 }}
-              className="flex flex-wrap items-center gap-3"
+              transition={{ delay: 0.2, duration: 0.5 }}
+              className="flex flex-wrap items-center gap-4 pt-1"
             >
               <button
                 onClick={() => jumpToSection('demo')}
-                className="rounded-full bg-amber-300 px-6 py-3 text-sm font-semibold text-slate-950 transition-transform hover:-translate-y-0.5"
+                className="stardew-btn-gold px-6 py-3.5 text-xs font-pixel uppercase tracking-wider"
               >
-                Try the Demo
+                Try Live Demo
               </button>
-              <button
-                onClick={() => jumpToSection('challenge')}
-                className="rounded-full border border-white/15 px-6 py-3 text-sm font-semibold text-stone-100 transition-colors hover:border-white/35 hover:bg-white/6"
+              <Link
+                href="/evolution"
+                className="stardew-btn-wood px-6 py-3.5 text-xs font-pixel uppercase tracking-wider"
               >
-                Beat the Model
-              </button>
+                Watch AI Evolution
+              </Link>
               <a
                 href={videoUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm font-medium text-teal-200 underline decoration-white/15 underline-offset-4 transition-colors hover:text-white"
+                className="inline-flex items-center gap-2 text-sm font-semibold text-amber-200/90 underline decoration-[#f6b535]/40 underline-offset-4 transition-colors hover:text-[#f6b535]"
               >
-                Watch the Video
+                <span>▶</span> Watch the Video
               </a>
             </motion.div>
 
             <motion.div
-              initial={{ opacity: 0, y: 18 }}
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3, duration: 0.6 }}
-              className="grid gap-4 border-t border-white/10 pt-6 sm:grid-cols-3"
+              transition={{ delay: 0.3, duration: 0.5 }}
+              className="grid gap-4 border-t-2 border-[#5c3214]/60 pt-6 sm:grid-cols-3"
             >
               {HERO_FACTS.map((fact) => (
-                <p
-                  key={fact}
-                  className="max-w-xs text-sm leading-6 text-stone-400 first:text-stone-200"
-                >
-                  {fact}
-                </p>
+                <div key={fact} className="flex items-start gap-2">
+                  <span className="text-amber-400 text-xs mt-0.5">✦</span>
+                  <p className="text-xs leading-5 text-stone-300 font-mono">
+                    {fact}
+                  </p>
+                </div>
               ))}
             </motion.div>
           </div>
 
+          {/* Rustic Wood Bulletin Box */}
           <motion.aside
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.15, duration: 0.7 }}
-            className="relative overflow-hidden rounded-[30px] border border-white/10 bg-stone-950/55 p-8 shadow-[0_30px_80px_rgba(0,0,0,0.35)]"
+            transition={{ delay: 0.15, duration: 0.6 }}
+            className="stardew-box p-7"
           >
-            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-300/60 to-transparent" />
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-teal-200/75">
-              Why this page exists
-            </p>
-            <div className="mt-6 space-y-5">
-              <p className="text-2xl leading-tight text-stone-100">
-                You watched the build. Now you get to stress test the result.
-              </p>
-              <p className="text-sm leading-7 text-stone-400">
-                Start with the demo to see the model fish in real time. Then switch to manual mode
-                and feel how unforgiving the minigame actually is. If you still think you can top
-                it, the starter repo and submission flow are waiting below.
-              </p>
+            <div className="flex items-center justify-between border-b border-[#5c3214] pb-3 mb-5">
+              <span className="font-pixel text-xs font-bold uppercase tracking-wider text-[#f6b535]">
+                Pelican Town Bulletin
+              </span>
+              <span className="text-xs font-mono text-amber-200/60">Willy&apos;s Shop</span>
             </div>
 
-            <div className="mt-8 space-y-4 border-t border-white/8 pt-6 text-sm text-stone-300">
-              <div className="flex items-start gap-3">
-                <span className="mt-1 h-2 w-2 rounded-full bg-amber-300" />
-                <p>Default mode is AI playback so the first thing you see is the model from the video.</p>
+            <h3 className="font-bold text-lg text-stone-100 mb-3 leading-snug">
+              Stress-test the video results right in your browser.
+            </h3>
+            <p className="text-xs leading-relaxed text-stone-300 mb-6 font-mono">
+              Start with the live demo below to inspect the AI pilot on tricky fish like the
+              Pufferfish or Catfish. Flip to manual mode anytime to feel the genuine physics.
+            </p>
+
+            <div className="space-y-3 border-t border-[#45220c] pt-5">
+              <div className="flex items-start gap-3 text-xs text-stone-200 font-mono">
+                <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#f6b535]" />
+                <p>AI Mode runs the official ep3500 baseline model (~56 KB ONNX graph).</p>
               </div>
-              <div className="flex items-start gap-3">
-                <span className="mt-1 h-2 w-2 rounded-full bg-teal-300" />
-                <p>The browser demo and the submission flow both use the same ONNX model contract.</p>
+              <div className="flex items-start gap-3 text-xs text-stone-200 font-mono">
+                <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
+                <p>100% genuine RL: learns PWM tapping, cushion landings, and predictive tracking.</p>
               </div>
-              <div className="flex items-start gap-3">
-                <span className="mt-1 h-2 w-2 rounded-full bg-stone-300" />
-                <p>The challenge is optional. The page still works if you only want to play with the AI.</p>
+              <div className="flex items-start gap-3 text-xs text-stone-200 font-mono">
+                <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-amber-200" />
+                <p>No downloads required: runs at 60 FPS client-side via WebAssembly.</p>
               </div>
             </div>
           </motion.aside>
         </section>
 
-        <section id="demo" className="scroll-mt-28 space-y-8">
-          <div className="flex flex-col gap-4 border-b border-white/10 pb-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.32em] text-amber-200/80">
-                Live demo
+        {/* LIVE DEMO SECTION */}
+        <section id="demo" className="scroll-mt-28 space-y-6">
+          <div className="flex flex-col gap-3 border-b-2 border-[#5c3214]/60 pb-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-2">
+              <p className="font-pixel text-xs text-[#f6b535] uppercase tracking-wider">
+                Interactive Arena
               </p>
-              <h2 className="max-w-3xl text-3xl leading-tight text-stone-50 sm:text-4xl">
-                Try the exact model from the video in your browser.
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-stone-100 tracking-tight">
+                Try the exact model from the video.
               </h2>
-              <p className="max-w-2xl text-base leading-7 text-stone-400">
-                Leave AI mode on if you want to watch the trained model handle different fish. Turn
-                it off if you want to see why this minigame is such a pain to solve in the first
-                place.
+              <p className="text-sm text-stone-300 max-w-2xl font-mono">
+                Toggle AI Pilot to watch the trained agent respond to erratic movements, or switch to manual control and tap to hold the bar yourself.
               </p>
             </div>
-            <a
-              href={videoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm font-medium text-teal-200 underline decoration-white/15 underline-offset-4 transition-colors hover:text-white"
+            <Link
+              href="/play"
+              className="stardew-btn-wood px-4 py-2.5 text-xs font-pixel uppercase tracking-wider self-start lg:self-auto"
             >
-              Rewatch the breakdown
-            </a>
+              Open Fullscreen Arena →
+            </Link>
           </div>
 
-          <div className="grid gap-10 rounded-[34px] border border-white/10 bg-black/20 p-8 shadow-[0_40px_120px_rgba(0,0,0,0.4)] lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
-            <div className="order-2 space-y-8 lg:order-1">
-              <div className="space-y-5">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-stone-500">
-                    Fish selector
-                  </p>
-                  <label className="mt-3 block text-sm text-stone-300">
-                    Pick a target species
-                  </label>
-                  <select
-                    className="mt-3 w-full rounded-2xl border border-white/10 bg-stone-950/90 px-4 py-4 text-stone-100 outline-none transition-colors focus:border-amber-300/60"
-                    value={selectedFish.name}
-                    onChange={(event) => {
-                      const fish = ALL_FISH.find((candidate) => candidate.name === event.target.value);
-                      if (fish) {
-                        setSelectedFish(fish);
-                      }
-                    }}
-                  >
-                    {ALL_FISH.map((fish) => (
-                      <option key={fish.name} value={fish.name}>
-                        {fish.name} - Difficulty {fish.difficulty}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <label className="block rounded-[24px] border border-white/10 bg-stone-950/70 p-5 transition-colors hover:border-white/20">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-semibold text-stone-100">
-                        {useAI ? 'AI Plays' : 'You Play'}
-                      </p>
-                      <p className="mt-1 text-sm leading-6 text-stone-400">
-                        {useAI
-                          ? 'This is the trained model from the video running through ONNX Runtime Web.'
-                          : 'Manual mode is active. Hold click or tap to control the bar yourself.'}
-                      </p>
-                    </div>
-                    <div
-                      className={`relative h-7 w-14 rounded-full transition-colors ${
-                        useAI ? 'bg-amber-300' : 'bg-white/12'
-                      }`}
+          <div className="stardew-box p-6 md:p-8">
+            <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
+              {/* Controls Column */}
+              <div className="space-y-6 order-2 lg:order-1">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block font-pixel text-xs text-amber-200/80 uppercase tracking-wider mb-2">
+                      Select Fish Species
+                    </label>
+                    <select
+                      className="w-full stardew-slot px-4 py-3 text-sm text-stone-100 outline-none border-2 border-[#5c3214] focus:border-[#f6b535] cursor-pointer font-mono"
+                      value={selectedFish.name}
+                      onChange={(event) => {
+                        const fish = ALL_FISH.find((candidate) => candidate.name === event.target.value);
+                        if (fish) {
+                          setSelectedFish(fish);
+                        }
+                      }}
                     >
-                      <input
-                        type="checkbox"
-                        checked={useAI}
-                        onChange={(event) => setUseAI(event.target.checked)}
-                        className="sr-only"
-                      />
-                      <div
-                        className={`absolute top-1 h-5 w-5 rounded-full bg-slate-950 transition-transform ${
-                          useAI ? 'left-8' : 'left-1'
+                      {ALL_FISH.map((fish) => (
+                        <option key={fish.name} value={fish.name} className="bg-[#1a0e07] text-stone-100">
+                          {fish.name} (Difficulty {fish.difficulty}, {fish.behaviour})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Mode Toggle */}
+                  <div className="stardew-slot p-4 border border-[#5c3214]/80">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="font-pixel text-xs uppercase text-[#f6b535]">
+                          {useAI ? 'Mode: AI Pilot' : 'Mode: Manual Angler'}
+                        </p>
+                        <p className="mt-1 text-xs text-stone-300 font-mono leading-relaxed">
+                          {useAI
+                            ? 'Neural network evaluates state every 16ms and decides button pressure.'
+                            : 'Manual mode active: hold mouse click, spacebar, or screen tap to reel.'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setUseAI(!useAI)}
+                        className={`px-4 py-2 text-xs font-pixel uppercase rounded border transition-colors cursor-pointer ${
+                          useAI
+                            ? 'bg-[#f6b535] text-[#24140b] font-bold border-[#8a4e0a]'
+                            : 'bg-[#3d200d] text-amber-200 border-[#6b3813] hover:bg-[#522c12]'
                         }`}
-                      />
+                      >
+                        {useAI ? 'AI ON' : 'MANUAL'}
+                      </button>
                     </div>
                   </div>
-                </label>
+                </div>
+
+                {/* 8-D Contract Telemetry Badges */}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="stardew-slot p-4">
+                    <p className="font-pixel text-[10px] text-amber-200/70 uppercase">
+                      Input Contract
+                    </p>
+                    <p className="mt-1 font-pixel text-lg text-[#f6b535]">8 Floats</p>
+                    <p className="mt-1 text-xs text-stone-300 font-mono leading-5">
+                      Fish kinematics, bar position, velocity, error, and catch gauge.
+                    </p>
+                  </div>
+                  <div className="stardew-slot p-4">
+                    <p className="font-pixel text-[10px] text-amber-200/70 uppercase">
+                      Decision Frequency
+                    </p>
+                    <p className="mt-1 font-pixel text-lg text-[#f6b535]">60 FPS</p>
+                    <p className="mt-1 text-xs text-stone-300 font-mono leading-5">
+                      Binary Q-value comparison (Press vs. Release) under 1ms latency.
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="border border-white/10 bg-stone-950/55 px-5 py-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-stone-500">
-                    Observation
-                  </p>
-                  <p className="mt-3 text-2xl text-stone-100">14 floats</p>
-                  <p className="mt-2 text-sm leading-6 text-stone-400">
-                    Fish position, bar state, velocities, difficulty, motion profile, and time.
-                  </p>
-                </div>
-                <div className="border border-white/10 bg-stone-950/55 px-5 py-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-stone-500">
-                    Action
-                  </p>
-                  <p className="mt-3 text-2xl text-stone-100">Binary</p>
-                  <p className="mt-2 text-sm leading-6 text-stone-400">
-                    Every frame the model chooses to press or release. Nothing more elaborate than that.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="order-1 flex justify-center lg:order-2">
-              <div className="relative">
-                <div className="absolute -inset-5 bg-[radial-gradient(circle,_rgba(251,191,36,0.18),_transparent_55%)] blur-2xl" />
-                <div className="relative rounded-[30px] border border-white/12 bg-[#050608] p-4 shadow-2xl">
+              {/* Game Canvas Column */}
+              <div className="order-1 lg:order-2 flex flex-col items-center justify-center">
+                <div className="relative p-3 bg-[#120904] border-4 border-[#6b3813] rounded-lg shadow-2xl">
                   <FishingGameComponent
                     fish={selectedFish}
                     modelUrl={useAI ? '/models/baseline.onnx' : undefined}
-                    width={380}
-                    height={600}
+                    width={320}
+                    height={520}
                   />
+                  {!useAI && (
+                    <div className="mt-2 text-center">
+                      <span className="font-pixel text-[10px] uppercase tracking-wider text-[#f6b535] bg-[#24140b] px-3 py-1 rounded border border-[#5c3214]">
+                        Click canvas or tap to reel
+                      </span>
+                    </div>
+                  )}
                 </div>
-                {!useAI && (
-                  <div className="pointer-events-none absolute -bottom-11 left-1/2 -translate-x-1/2">
-                    <span className="rounded-full border border-white/12 bg-stone-950/90 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-stone-300">
-                      Hold click or tap
-                    </span>
-                  </div>
-                )}
               </div>
             </div>
           </div>
         </section>
 
-        <section className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
-          <div className="space-y-6 border-t border-white/10 pt-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.32em] text-amber-200/80">
-              Quick context
+        {/* QUICK CONTEXT SECTION */}
+        <section className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
+          <div className="space-y-5 border-t-2 border-[#5c3214]/60 pt-6">
+            <p className="font-pixel text-xs text-[#f6b535] uppercase tracking-wider">
+              Under the Hood
             </p>
-            <h2 className="max-w-2xl text-3xl leading-tight text-stone-50">
-              Under the hood, the model sees a tiny stream of state and makes one decision every frame.
+            <h2 className="text-2xl sm:text-3xl font-bold text-stone-100 tracking-tight">
+              A lean network solving 1-D continuous physics.
             </h2>
-            <p className="max-w-2xl text-base leading-7 text-stone-400">
-              No hand-coded fishing strategy lives in the browser. The exported model gets the current
-              state, produces two scores, and the higher one decides whether to press or release.
+            <p className="text-sm text-stone-300 leading-relaxed font-mono">
+              The agent does not use cheat codes or hardcoded timers. It observes Newtonian
+              mechanics (gravity, velocity, bar bounce damping) and learned through trial and error
+              that rhythmically tapping (PWM hover) beats frantic holding.
             </p>
-            <div className="grid gap-6 md:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-3 pt-2">
               {QUICK_CONTEXT.map((item) => (
-                <div key={item.label} className="space-y-3 border-l border-white/10 pl-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">
+                <div key={item.label} className="stardew-slot p-4 space-y-1.5">
+                  <p className="font-pixel text-[10px] text-amber-200/60 uppercase">
                     {item.label}
                   </p>
-                  <p className="text-2xl text-stone-100">{item.value}</p>
-                  <p className="text-sm leading-6 text-stone-400">{item.description}</p>
+                  <p className="font-pixel text-base text-[#f6b535]">{item.value}</p>
+                  <p className="text-xs text-stone-300 font-mono leading-5">{item.description}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="border border-white/10 bg-stone-950/45 p-7">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-teal-200/75">
-              Companion note
+          <div className="stardew-box p-6 space-y-3">
+            <div className="flex items-center gap-2 border-b border-[#5c3214] pb-2">
+              <span className="text-base">📜</span>
+              <p className="font-pixel text-xs text-[#f6b535] uppercase">
+                Architecture Spec
+              </p>
+            </div>
+            <p className="text-sm font-semibold text-stone-100">
+              Double DQN with Dueling Advantage & N-Step Returns
             </p>
-            <p className="mt-4 text-lg leading-8 text-stone-200">
-              The goal of the page is not to retell the whole project. It is to let you immediately
-              test the punchline from the video, then go deeper only if you want to.
+            <p className="text-xs text-stone-300 leading-relaxed font-mono">
+              By separating the value of state V(s) from action advantage A(s,a), the network
+              knows when it is in a safe hover versus when an immediate thrust is required.
+              The model compiles to a lightweight 56 KB ONNX graph that runs instantly in any browser.
             </p>
-            <p className="mt-4 text-sm leading-7 text-stone-400">
-              That is why the demo comes first, the technical context is short, and the challenge
-              sits below as an optional next step instead of the main identity of the site.
-            </p>
+            <div className="pt-2">
+              <Link
+                href="/evolution"
+                className="inline-flex items-center gap-1.5 text-xs font-pixel text-amber-300 hover:text-amber-200 underline underline-offset-4"
+              >
+                Inspect the 4 learning stages →
+              </Link>
+            </div>
           </div>
         </section>
 
+        {/* CHALLENGE / $10 BOUNTY SECTION */}
         <section
           id="challenge"
-          className="scroll-mt-28 rounded-[34px] border border-white/10 bg-[linear-gradient(135deg,rgba(251,191,36,0.1),rgba(13,148,136,0.07)_48%,rgba(3,7,18,0.5))] p-8 shadow-[0_40px_120px_rgba(0,0,0,0.35)]"
+          className="scroll-mt-28 stardew-box p-8 border-2 border-[#8b5523]"
         >
-          <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
             <div className="space-y-6">
-              <div className="space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.32em] text-amber-200/80">
-                  Optional challenge
-                </p>
-                <h2 className="max-w-2xl text-3xl leading-tight text-stone-50 sm:text-4xl">
-                  Think you can train something even nastier?
+              <div className="space-y-2.5">
+                <div className="inline-flex items-center gap-2 rounded bg-[#331a0b] px-3 py-1 border border-[#6b3813]">
+                  <span className="text-xs">🏆</span>
+                  <span className="font-pixel text-[10px] font-bold text-[#f6b535] uppercase">
+                    Community Challenge
+                  </span>
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-stone-100 tracking-tight">
+                  Can your model beat the baseline?
                 </h2>
-                <p className="max-w-2xl text-base leading-7 text-stone-300/90">
-                  If the demo makes you think, &quot;I can beat that,&quot; this is the lane. The
-                  challenge is intentionally simple: train on the same environment, export to ONNX,
-                  and submit a model that generalizes better than the benchmark from the video.
+                <p className="text-sm text-stone-300 leading-relaxed font-mono">
+                  Think your reinforcement learning pipeline can outperform ep3500 on legendary fish?
+                  Train your own model using the free Colab notebook, export to ONNX, and submit it.
+                  The highest score across hidden test seeds when the timer expires wins the $10 prize.
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <a
                   href={COMPETITION_CONFIG.githubRepo}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="rounded-full bg-stone-100 px-6 py-3 text-sm font-semibold text-slate-950 transition-transform hover:-translate-y-0.5"
+                  className="stardew-btn-gold px-5 py-3 text-xs font-pixel uppercase tracking-wider"
                 >
-                  Get the Starter Repo
+                  Starter Colab & Repo
                 </a>
                 <Link
                   href="/submit"
-                  className="rounded-full border border-white/15 px-6 py-3 text-sm font-semibold text-stone-100 transition-colors hover:border-white/35 hover:bg-white/6"
+                  className="stardew-btn-wood px-5 py-3 text-xs font-pixel uppercase tracking-wider"
                 >
-                  Submit a Model
+                  Submit Model (.onnx)
                 </Link>
                 <Link
                   href="/rules"
-                  className="rounded-full border border-transparent px-2 py-3 text-sm font-medium text-teal-100 transition-colors hover:text-white"
+                  className="text-xs font-pixel text-amber-300/80 hover:text-[#f6b535] underline underline-offset-4 ml-2"
                 >
-                  Read the Challenge Guide
+                  Full Regulations
                 </Link>
               </div>
             </div>
 
-            <div className="space-y-5 border-t border-white/10 pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-stone-500">
-                How it works
+            <div className="space-y-4 border-t-2 border-[#5c3214]/60 pt-6 lg:border-l-2 lg:border-t-0 lg:pl-8 lg:pt-0">
+              <p className="font-pixel text-xs text-amber-200/70 uppercase tracking-wider">
+                How to Enter
               </p>
-              <ol className="space-y-4">
+              <ol className="space-y-3 font-mono text-xs">
                 {CHALLENGE_STEPS.map((step, index) => (
-                  <li key={step} className="flex items-start gap-4">
-                    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/12 bg-black/25 text-sm font-semibold text-stone-100">
+                  <li key={step} className="flex items-start gap-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[#452410] border border-[#6b3813] font-pixel text-[10px] font-bold text-[#f6b535]">
                       {index + 1}
                     </span>
-                    <p className="text-sm leading-7 text-stone-300">{step}</p>
+                    <p className="leading-5 text-stone-300 pt-0.5">{step}</p>
                   </li>
                 ))}
               </ol>
-              <p className="text-sm leading-7 text-stone-400">
-                The browser preview is instant, but the spirit of the challenge is generalization. The
-                guide spells out the model contract, scoring, and guardrails.
+              <p className="text-[11px] text-amber-200/50 font-mono border-t border-[#452410] pt-3">
+                Client preview checks on known seeds; official scores are verified server-side on hidden test seeds.
               </p>
             </div>
           </div>
         </section>
 
+        {/* LEADERBOARD SECTION */}
         <section id="leaderboard" className="scroll-mt-28 space-y-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.32em] text-amber-200/80">
-                Benchmark board
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between border-b-2 border-[#5c3214]/60 pb-4">
+            <div>
+              <p className="font-pixel text-xs text-[#f6b535] uppercase tracking-wider">
+                Leaderboard
               </p>
-              <h2 className="text-3xl leading-tight text-stone-50 sm:text-4xl">
-                Current challenge leaderboard
+              <h2 className="text-2xl sm:text-3xl font-bold text-stone-100 tracking-tight">
+                Current Challenge Standings
               </h2>
             </div>
-            <p className="max-w-xl text-sm leading-6 text-stone-400">
-              The benchmark starts with the model from the video. If someone ships a better one, it
-              belongs here.
+            <p className="text-xs text-amber-200/60 font-mono">
+              Live evaluations across all 25 difficulty tiers
             </p>
           </div>
           <Leaderboard />

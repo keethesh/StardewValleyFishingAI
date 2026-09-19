@@ -127,7 +127,7 @@ export default function EvolutionShowcase() {
         sessionRef.current = sess;
         setTrace(traceRes);
         gameRef.current = new FishingGame(carp);
-        setStatus(`Stage ready — ${stage.name}`);
+        setStatus(`Stage ready: ${stage.name}`);
         setPlaying(true);
       } catch (err) {
         console.error(err);
@@ -469,7 +469,7 @@ export default function EvolutionShowcase() {
               <Metric label="Tap frequency" value={`${telemetry.tapHz.toFixed(0)} Hz`} />
               <Metric
                 label="ΔQ (press−release)"
-                value={mode === 'live' ? telemetry.deltaQ.toFixed(3) : '—'}
+                value={mode === 'live' ? telemetry.deltaQ.toFixed(3) : 'N/A'}
               />
               <Metric label="Catch meter" value={`${(telemetry.progress * 100).toFixed(0)}%`} />
               <Metric label="In bar" value={telemetry.inBar ? 'yes' : 'no'} />
@@ -502,7 +502,7 @@ export default function EvolutionShowcase() {
 
             {trace && mode === 'trace' && (
               <p className="text-xs text-stone-400">
-                Replay: {trace.trace.fish} seed {trace.trace.seed} —{' '}
+                Replay: {trace.trace.fish} (seed {trace.trace.seed}) :{' '}
                 {trace.trace.success ? 'caught' : 'lost'} ({trace.trace.length} frames)
               </p>
             )}
