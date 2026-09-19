@@ -1,3 +1,40 @@
+# Python
 *.pyc
 __pycache__/
 .venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# IDE / tooling
+.idea/
+.vscode/
+.omx/
+.DS_Store
+Thumbs.db
+
+# Secrets / env
+.env
+.env.*
+!.env.example
+
+# Training artefacts (large / regenerable)
+models/checkpoints/*.pth
+training_logs/graphs/
+training_logs/*.csv
+training_logs/milestones_*.txt
+# Keep evolution stage JSON under training_logs/evolution/ (website needs copies in public/)
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+.vercel/
+*.tsbuildinfo
+
+# ONNX Runtime WASM copies (install via npm, then npm run copy-wasm)
+competition-website/public/wasm/
+
+# Misc
+*.log

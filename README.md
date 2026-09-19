@@ -1,87 +1,72 @@
-Below is the reformatted Markdown document with improved structure, clarity, and consistent code blocks:
+# Stardew Valley Fishing AI
 
----
+Dueling Double DQN agent for the Stardew Valley fishing minigame, plus a Next.js companion site for demos and a community challenge.
 
-# Stardew Valley Fishing Minigame Double DQN
+## Stack (locked)
 
-## Overview
-This project implements a Deep Reinforcement Learning agent to master a fishing minigame in Stardew Valley. Using a Double Deep Q-Network (DDQN) architecture, the agent learns to time button presses perfectly to catch various fish with different movement behaviors and difficulty levels.
+| Piece | Choice |
+|---|---|
+| Observation | **8-D** (`environment.py` / `game-logic.ts`) |
+| Algorithm | Dueling Double DQN + 3-step returns |
+| Export | ONNX `[1,8] → [1,2]`, ~55 KB |
+| Published baseline | `episode_3500` → `competition-website/public/models/baseline.onnx` |
 
-## Technical Features
-- **Double DQN Implementation**: Reduces Q-value overestimation bias for more accurate decision making.
-- **Advanced Network Architecture**: Utilizes a 3-layer neural network (128-128-64) with optimized weight initialization.
-- **Curriculum Learning**: Gradually introduces harder fish types as the agent improves.
-- **Time-Aware State Design**: Incorporates time as a state dimension for better strategic decisions.
-- **CUDA Acceleration**: GPU-optimized tensor operations for faster training.
+Physics is shared: Python `PortableRNG` (Mulberry32) matches TypeScript `portable-rng.ts`. Parity: `python tests/parity_check.py`.
 
-## Installation
-
-Clone the repository and install the dependencies:
+## Setup (training)
 
 ```bash
-# Clone repository
-git clone https://github.com/keethesh/StardewValleyFishingAI.git
-cd StardewValleyFishingAI
-
-# Install dependencies
-pip install torch numpy matplotlib tkinter
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+pip install torch numpy matplotlib onnx onnxruntime pygame
 ```
 
-## Usage
-
-### Training a New Model
-To train a new model, set `train_new_model = True` in the main block and run:
+## Train
 
 ```bash
-python main.py
+python main.py --episodes 5000
 ```
 
-### Using a Pre-trained Model
-To use a pre-trained model:
-1. Set `train_new_model = False` in the main block.
-2. Ensure the model path is correctly specified.
-3. Run:
+Checkpoints write every 500 episodes under `models/checkpoints/`. Each save also writes:
+- action trace + metrics → `training_logs/evolution/episode_N.json`
+- **`eval_score`** — greedy eval on the full fish catalog × 3 fixed seeds (`eval_metrics.py`)
 
 ```bash
-python main.py
+# Score any checkpoint (training pulse; public fixed seeds)
+python eval_metrics.py models/checkpoints/episode_3500.pth --failures-only
 ```
 
-### Interactive Mode
-After evaluation, the program enters interactive mode, where you can:
-- Select specific fish to watch the agent catch.
-- Choose random fish.
-- Observe performance across different fish behaviors.
+`Win_Rate_100` in the CSV is only a live training pulse. Prefer **`eval_score`** at checkpoints.
 
-## Fish Behaviors
-The agent learns to handle five distinct fish behaviors:
-- **Mixed**: Combination of movement patterns.
-- **Dart**: Quick, sudden movements requiring fast reactions.
-- **Smooth**: Gradual, predictable movements.
-- **Sinker**: Downward-biased movement.
-- **Floater**: Upward-biased movement.
+## Export ONNX
 
-## Training Process
-1. The agent starts with simpler fish (difficulty ≤ 40).
-2. As performance improves, it progresses to medium difficulty (≤ 70).
-3. Finally, it tackles the hardest fish (≤ 100).
-4. Early stopping occurs after a consistent 98%+ success rate.
+```bash
+python export_onnx.py models/checkpoints/episode_3500.pth --output competition-website/public/models/baseline.onnx
+```
 
-## Model Details
-- **State Space**: 11 dimensions, including positions, speeds, fish characteristics, and time.
-- **Action Space**: 2 actions (press/release button).
-- **Network Architecture**: 3 hidden layers with sizes 128, 128, and 64 neurons respectively, using ReLU activations.
-- **Learning Algorithm**: Double DQN with soft target updates.
+## Companion site
 
-## Best Models
-Pre-trained models are saved in the "Best models" folder from multiple training runs. Each model represents a different training session with various hyperparameters and optimizations.
+See [`competition-website/README.md`](competition-website/README.md).
 
-## Results
-- **Overall Success Rate**: 95% across all fish types.
-- **Smooth-Movement Fish**: 92.7% success.
-- **Dart-Movement Fish**: 78.4% success.
-- **Higher Difficulty Fish**: Near 100% success.
+- `/play` — human vs baseline AI  
+- `/evolution` — stage scrubber (ep20 → 500 → 1500 → 3500)  
+- `/submit` — upload ONNX; **official** score is all fish × 3 **fresh** seeds (server)
 
-## Acknowledgments
-This project demonstrates the application of recent reinforcement learning techniques to a timing-based game, showcasing how curriculum learning and network architecture choices can significantly impact learning efficiency.
+## Project layout
 
----
+```
+environment.py          # Gym-like env, 8-D obs, rewards
+main.py                 # Dueling Double DQN trainer
+eval_metrics.py         # Checkpoint eval_score (full catalog)
+export_onnx.py          # ONNX export + ORT verify
+portable_rng.py         # Mulberry32 (parity with TS)
+tests/parity_check.py   # Python ↔ TS physics parity
+competition-website/    # Next.js demo + challenge
+HANDOFF.md              # Architecture + session status
+```
+
+## Notes
+
+- Old C51 / 14-D / 24-D checkpoints are obsolete; do not mix them with this stack.
+- Ice Pip and Scorpion Carp remain soft on the published baseline on purpose (challenge headroom).
+- `HANDOFF.md` has the full design rationale and checklist.

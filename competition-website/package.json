@@ -1,0 +1,40 @@
+{
+  "name": "competition-website",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "parity": "tsx scripts/parity-check.ts scripts/parity-fixture.json",
+    "copy-wasm": "node scripts/copy-wasm.mjs",
+    "postinstall": "node scripts/copy-wasm.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.87.1",
+    "@vercel/kv": "^3.0.0",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.23.26",
+    "lucide-react": "^0.556.0",
+    "next": "^16.1.1",
+    "onnxruntime-node": "^1.23.2",
+    "onnxruntime-web": "^1.23.2",
+    "react": "19.2.1",
+    "react-dom": "19.2.1",
+    "redis": "^5.10.0",
+    "tailwind-merge": "^3.4.0",
+    "zustand": "^5.0.9"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "babel-plugin-react-compiler": "1.0.0",
+    "eslint": "^9",
+    "eslint-config-next": "16.0.8",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

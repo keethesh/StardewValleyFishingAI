@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import time
-from collections import deque
 from typing import Dict, List, Optional, Tuple, Union, Any
 
 import numpy as np
@@ -11,8 +10,13 @@ try:
 except ImportError:
     pygame = None
 
+from portable_rng import PortableRNG
+
 # Configure logging
 logger = logging.getLogger(__name__)
+
+# Observation contract (must match competition ONNX input / TypeScript sim)
+OBS_DIM = 8
 
 
 class FishingMinigameEnv:
@@ -34,8 +38,9 @@ class FishingMinigameEnv:
     }
 
     def __init__(self, render_mode="human", seed=None, fish_name=None, normalize_obs=False, augment_fish=True):
-        # Set random seed if provided
-        self.np_random = np.random.RandomState(seed)
+        # Portable RNG (shared algorithm with TypeScript) for physics parity
+        self._seed = 0 if seed is None else int(seed)
+        self.np_random = PortableRNG(self._seed)
 
         # Environment parameters
         self.track_height = 568
@@ -66,7 +71,7 @@ class FishingMinigameEnv:
         self.episode_reward = 0
         self.episode_length = 0
 
-        # Observation normalization
+        # Observation normalization (optional; off by default for competition contract)
         self.normalize_obs = normalize_obs
         self.obs_mean = None
         self.obs_std = None
@@ -77,30 +82,13 @@ class FishingMinigameEnv:
         # Cache normalized constants for better performance
         self._norm_constants = {
             'height': self.track_height,
-            'max_fish_size': 20,  # Will be set in reset
+            'max_fish_size': 20,
             'speed_norm': 10.0,
-            'accel_norm': 5.0,  # For acceleration normalization
             'max_timesteps': 2000
         }
 
-        # Temporal feature tracking (for velocity/acceleration/history)
-        self._state_history = deque(maxlen=3)
-        self._prev_bobber_speed = 0.0
-        self._prev_bar_speed = 0.0
-
-        # === ENHANCED STATE TRACKING ===
-        # Frame stacking: remember last frame's key values
-        self._prev_frame_bobber_pos = 100.0
-        self._prev_frame_bar_pos = 200.0
-        self._prev_frame_distance = 0.5
-
-        # Behavior type order for one-hot encoding
-        self.BEHAVIOR_ORDER = ['sinker', 'dart', 'smooth', 'mixed', 'floater']
-        self._behavior_onehot_cache = None  # Cached one-hot for current fish
-
-        # Pre-allocate observation buffer (24D) for zero-alloc _get_observation
-        self._obs_buffer = np.zeros(24, dtype=np.float32)
-        self._obs_behavior_onehot = np.zeros(5, dtype=np.float32)
+        # Pre-allocate observation buffer (8-D competition contract)
+        self._obs_buffer = np.zeros(OBS_DIM, dtype=np.float32)
 
         # Initialize Pygame if needed
         if render_mode == "human":
@@ -241,12 +229,16 @@ class FishingMinigameEnv:
         return True
 
     def seed(self, seed=None):
-        """Set random seed for reproducibility."""
-        self.np_random = np.random.RandomState(seed)
-        return [seed]
+        """Set random seed for reproducibility (portable RNG shared with TS)."""
+        self._seed = 0 if seed is None else int(seed)
+        self.np_random = PortableRNG(self._seed)
+        return [self._seed]
 
-    def reset(self):
+    def reset(self, seed=None):
         """Reset the environment to initial state and return observation."""
+        if seed is not None:
+            self.seed(seed)
+
         self.current_timestep = 0
         self.max_timesteps = 2000  # Match with max_t
 
@@ -286,88 +278,35 @@ class FishingMinigameEnv:
         self.episode_reward = 0
         self.episode_length = 0
 
-        # Reset temporal tracking
-        self._state_history.clear()
-        self._prev_bobber_speed = 0.0
-        self._prev_bar_speed = 0.0
-
-        # === ENHANCED STATE RESET ===
-        self._prev_frame_bobber_pos = 100.0
-        self._prev_frame_bar_pos = 200.0
-        self._prev_frame_distance = 0.5
-
-        # Cache behavior one-hot for this fish
-        behaviour = self.current_fish.get('behaviour', 'mixed').lower()
-        self._behavior_onehot_cache = self._obs_behavior_onehot.copy()
-        if behaviour in self.BEHAVIOR_ORDER:
-            self._behavior_onehot_cache[self.BEHAVIOR_ORDER.index(behaviour)] = 1.0
-
         # Return the initial observation
         return self._get_observation()
 
     def _get_observation(self):
-        """Convert game state to ML-friendly observation vector (24D) — zero-alloc.
+        """8-D observation contract shared with the competition / website.
 
-        Uses a pre-allocated buffer (_obs_buffer) to avoid creating a new
-        numpy array on every call (~6M calls during training).
+        [0] bobber_pos / height
+        [1] bobber_vel / speed_norm
+        [2] bar_pos / height
+        [3] bar_vel / speed_norm
+        [4] bar_height / height
+        [5] (bar_center - bobber_pos) / height   # signed tracking error
+        [6] in_bar ? 1.0 : 0.0
+        [7] distanceFromCatching
         """
         buf = self._obs_buffer
         nc = self._norm_constants
-
-        # Accelerations (change in speed)
-        bobber_accel = (self.bobberSpeed - self._prev_bobber_speed) / nc['accel_norm']
-        bar_accel = (self.bobberBarSpeed - self._prev_bar_speed) / nc['accel_norm']
-        self._prev_bobber_speed = self.bobberSpeed
-        self._prev_bar_speed = self.bobberBarSpeed
-
-        # Bar center & distance to it
         bar_center = self.bobberBarPos + (self.bobberBarHeight * 0.5)
-        dist_to_bar = (self.bobberPosition - bar_center) / nc['height']
 
-        # [0-13]: Base features
         buf[0] = self.bobberPosition / nc['height']
         buf[1] = self.bobberSpeed / nc['speed_norm']
-        buf[2] = bobber_accel
-        buf[3] = self.bobberBarPos / nc['height']
-        buf[4] = self.bobberBarSpeed / nc['speed_norm']
-        buf[5] = bar_accel
-        buf[6] = self.bobberBarHeight / nc['height']
-        buf[7] = dist_to_bar
-        buf[8] = float(self.bobberInBar)
-        buf[9] = self.distanceFromCatching
-        buf[10] = self.fishSize / nc['max_fish_size']
-        buf[11] = self.difficulty * 0.01
-        buf[12] = float(self.motionType) * 0.25
-        buf[13] = self.current_timestep / nc['max_timesteps']
+        buf[2] = self.bobberBarPos / nc['height']
+        buf[3] = self.bobberBarSpeed / nc['speed_norm']
+        buf[4] = self.bobberBarHeight / nc['height']
+        buf[5] = (bar_center - self.bobberPosition) / nc['height']
+        buf[6] = 1.0 if self.bobberInBar else 0.0
+        buf[7] = self.distanceFromCatching
 
-        # [14-18]: Behavior one-hot (cached on reset)
-        buf[14:19] = self._behavior_onehot_cache
-
-        # [19]: Predicted fish position 1-step ahead
-        # FIX: was divided by nc['height'] TWICE (line 347 and 348), producing a near-zero dead dimension.
-        # Only clip once; the first division already normalizes to [0, 1] for typical values.
-        pred_1 = (self.bobberPosition + self.bobberSpeed + self.floaterSinkerAcceleration) / nc['height']
-        buf[19] = np.clip(pred_1, 0.0, 1.0)
-
-        # [20]: Predicted fish position 3-step ahead
-        pred_3 = (self.bobberPosition + 3.0 * self.bobberSpeed + 4.5 * bobber_accel * nc['accel_norm']) / nc['height']
-        buf[20] = np.clip(pred_3, 0.0, 1.0)
-
-        # [21]: Position error (bar center relative to fish)
-        buf[21] = (bar_center - self.bobberPosition) / nc['height']
-
-        # [22-23]: Frame-to-frame deltas
-        buf[22] = (self.bobberPosition - self._prev_frame_bobber_pos) / nc['height']
-        buf[23] = (self.bobberBarPos - self._prev_frame_bar_pos) / nc['height']
-
-        # Update frame history
-        self._prev_frame_bobber_pos = self.bobberPosition
-        self._prev_frame_bar_pos = self.bobberBarPos
-        self._prev_frame_distance = self.distanceFromCatching
-
-        # FIX: return a copy to prevent callers from holding a live reference to _obs_buffer.
-        # Without this, the next _get_observation() call mutates previously-returned states,
-        # destroying temporal-difference learning in single-env paths (replay sees state == next_state).
+        # Return a copy so callers don't hold a live reference to _obs_buffer.
         return buf.copy()
 
     def _normalize_observation(self, obs):
