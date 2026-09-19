@@ -38,3 +38,6 @@ competition-website/public/wasm/
 
 # Misc
 *.log
+
+models/*.pth
+
