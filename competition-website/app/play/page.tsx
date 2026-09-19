@@ -29,102 +29,111 @@ export default function PlayPage() {
   const restart = () => setKey((k) => k + 1);
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-slate-950 text-stone-100 selection:bg-amber-300 selection:text-slate-950">
+    <main className="min-h-screen overflow-x-hidden bg-[#090e15] text-[#f7f2ea] selection:bg-[#f7bf47] selection:text-[#24140b]">
       <Navbar />
 
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,_rgba(45,212,191,0.1),_transparent_34%),radial-gradient(circle_at_85%_12%,_rgba(251,191,36,0.1),_transparent_22%),linear-gradient(180deg,_#071118_0%,_#05070a_55%,_#020304_100%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,_rgba(42,88,140,0.22),_transparent_40%),radial-gradient(circle_at_85%_12%,_rgba(247,191,71,0.12),_transparent_28%),linear-gradient(180deg,_#090e15_0%,_#0e1622_55%,_#070a0f_100%)]" />
       </div>
 
-      <div className="relative z-10 mx-auto max-w-6xl px-6 pb-20 pt-28 md:pt-32">
-        <header className="mb-10 max-w-2xl space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.34em] text-amber-200/80">
-            Play
+      <div className="relative z-10 mx-auto max-w-6xl px-6 pb-24 pt-28 md:pt-32">
+        <header className="mb-10 max-w-3xl space-y-3">
+          <p className="text-xs font-bold uppercase tracking-[0.34em] text-[#f7bf47]">
+            Interactive Fishing Minigame
           </p>
-          <h1 className="font-[family-name:var(--font-pixel)] text-4xl text-stone-50 md:text-5xl">
+          <h1 className="font-[family-name:var(--font-pixel)] text-3xl sm:text-4xl text-[#fff7e6] drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
             Human vs AI
           </h1>
-          <p className="text-stone-300 leading-relaxed">
-            Same physics as training. Hold click / tap to thrust. The published baseline
-            is episode 3500.
+          <p className="text-[#d8cbba] leading-relaxed text-sm sm:text-base">
+            Step into the pond with exact Stardew Valley physics. Hold left-click or spacebar on desktop (or tap the reel button on mobile) to thrust the green bar. Can you outfish the Episode 3500 baseline?
           </p>
         </header>
 
-        <div className="mb-8 flex flex-wrap items-end gap-4">
-          <label className="text-sm text-stone-400">
-            Fish
-            <select
-              value={fish.name}
-              onChange={(e) => {
-                const next = playable.find((f) => f.name === e.target.value);
-                if (next) {
-                  setFish(next);
-                  restart();
-                }
-              }}
-              className="ml-2 rounded-sm border border-white/15 bg-slate-950 px-3 py-2 text-stone-100"
-            >
-              {playable.map((f) => (
-                <option key={f.name} value={f.name}>
-                  {f.name} ({f.difficulty} · {f.behaviour})
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="inline-flex rounded-sm border border-white/10 p-0.5 text-sm">
-            {(
-              [
-                ['human', 'You'],
-                ['ai', 'AI'],
-                ['race', 'Race'],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => {
-                  setMode(id);
-                  restart();
+        <div className="mb-10 stardew-box p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <label className="text-xs font-bold uppercase tracking-wider text-[#e6b978] flex items-center gap-2">
+              Target Fish:
+              <select
+                value={fish.name}
+                onChange={(e) => {
+                  const next = playable.find((f) => f.name === e.target.value);
+                  if (next) {
+                    setFish(next);
+                    restart();
+                  }
                 }}
-                className={`px-3 py-1.5 ${
-                  mode === id ? 'bg-teal-400/20 text-teal-100' : 'text-stone-400'
-                }`}
+                className="rounded border-2 border-[#6b3813] bg-[#180e07] px-3 py-1.5 text-sm font-semibold text-[#fff7e6] focus:outline-none focus:border-[#f7bf47]"
               >
-                {label}
-              </button>
-            ))}
+                {playable.map((f) => (
+                  <option key={f.name} value={f.name} className="bg-[#180e07] text-[#fff7e6]">
+                    {f.name} ({f.difficulty} · {f.behaviour.toUpperCase()})
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="inline-flex rounded-md p-1 bg-[#180e07] border border-[#522a0e]">
+              {(
+                [
+                  ['human', 'Solo Player'],
+                  ['ai', 'Solo AI'],
+                  ['race', 'Race (Side-by-Side)'],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => {
+                    setMode(id);
+                    restart();
+                  }}
+                  className={`px-3 py-1.5 text-xs font-bold rounded transition-all ${
+                    mode === id
+                      ? 'stardew-btn-gold text-[#24140b]'
+                      : 'text-[#d8cbba] hover:text-[#fff7e6]'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <button
-            type="button"
-            onClick={restart}
-            className="rounded-sm border border-white/15 px-3 py-1.5 text-sm text-stone-200"
-          >
-            Restart
-          </button>
-
-          <Link href="/evolution" className="text-sm text-amber-200/80 hover:text-amber-100">
-            Watch it learn →
-          </Link>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={restart}
+              className="stardew-btn-wood text-xs px-4 py-2 text-[#fff7e6]"
+            >
+              🔄 Restart Cast
+            </button>
+            <Link
+              href="/evolution"
+              className="text-xs font-bold text-[#f7bf47] hover:text-[#ffdb80] underline underline-offset-4"
+            >
+              Watch it learn →
+            </Link>
+          </div>
         </div>
 
-        <div
-          className={`flex flex-wrap justify-center gap-8 ${
-            mode === 'race' ? '' : ''
-          }`}
-        >
+        <div className="flex flex-wrap justify-center items-start gap-8 md:gap-12">
           {(mode === 'human' || mode === 'race') && (
-            <div className="space-y-2 text-center">
-              <p className="text-xs uppercase tracking-wider text-stone-500">You</p>
+            <div className="flex flex-col items-center space-y-3">
+              <div className="stardew-slot px-4 py-1 text-center">
+                <span className="text-xs font-bold font-[family-name:var(--font-pixel)] text-[#f7bf47] tracking-wider uppercase">
+                  Player 1: You
+                </span>
+              </div>
               <FishingGameComponent key={`h-${key}`} fish={fish} width={200} height={600} />
             </div>
           )}
           {(mode === 'ai' || mode === 'race') && (
-            <div className="space-y-2 text-center">
-              <p className="text-xs uppercase tracking-wider text-stone-500">
-                Baseline AI
-              </p>
+            <div className="flex flex-col items-center space-y-3">
+              <div className="stardew-slot px-4 py-1 text-center">
+                <span className="text-xs font-bold font-[family-name:var(--font-pixel)] text-[#a3e635] tracking-wider uppercase">
+                  AI Pilot: Ep 3500
+                </span>
+              </div>
               <FishingGameComponent
                 key={`a-${key}`}
                 fish={fish}

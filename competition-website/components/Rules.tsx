@@ -28,23 +28,22 @@ const rules = [
 export default function Rules() {
     return (
         <section id="rules" className="py-24 relative">
-            {/* Background Elements */}
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-slate-900/50 to-transparent pointer-events-none" />
-
             <div className="max-w-5xl mx-auto px-6 relative z-10">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.8 }}
                     viewport={{ once: true }}
-                    className="mb-16 flex flex-col items-center text-center"
+                    className="mb-14 flex flex-col items-center text-center"
                 >
-                    <div className="w-16 h-1 bg-gradient-to-r from-transparent via-cyan-500 to-transparent mb-8" />
-                    <h2 className="text-3xl md:text-4xl font-bold text-white text-pixel mb-6">
-                        Competition <span className="text-purple-400">Rules</span>
+                    <p className="text-xs font-bold uppercase tracking-[0.32em] text-[#f7bf47] mb-3">
+                        Official Challenge Regulations
+                    </p>
+                    <h2 className="text-3xl md:text-4xl font-bold text-[#fff7e6] font-[family-name:var(--font-pixel)] mb-4 drop-shadow">
+                        Competition <span className="text-[#f7bf47]">Rules</span>
                     </h2>
-                    <p className="text-slate-400 max-w-xl">
-                        To win the prize, your agent must follow these constraints. Breaking them will result in disqualification.
+                    <p className="text-[#d8cbba] max-w-xl text-sm sm:text-base leading-relaxed">
+                        To win the bounty and place on the leaderboard, your model must honor the official 8-D contract.
                     </p>
                 </motion.div>
 
@@ -56,13 +55,13 @@ export default function Rules() {
                             whileInView={{ opacity: 1, scale: 1 }}
                             transition={{ duration: 0.5, delay: idx * 0.1 }}
                             viewport={{ once: true }}
-                            className="glass-panel p-6 rounded-xl hover:bg-slate-800/60 transition-colors border-l-4 border-l-cyan-500/0 hover:border-l-cyan-500"
+                            className="stardew-box p-6 hover:border-[#d8891d] transition-colors"
                         >
                             <div className="flex items-start gap-4">
-                                <span className="text-3xl bg-slate-800 p-3 rounded-lg">{rule.icon}</span>
+                                <span className="text-3xl bg-[#180e07] border border-[#522a0e] p-3 rounded-md">{rule.icon}</span>
                                 <div>
-                                    <h4 className="font-bold text-white text-lg mb-2">{rule.title}</h4>
-                                    <p className="text-slate-400 text-sm leading-relaxed">{rule.desc}</p>
+                                    <h4 className="font-bold text-[#fff7e6] text-base mb-2 font-[family-name:var(--font-pixel)]">{rule.title}</h4>
+                                    <p className="text-[#d8cbba] text-xs sm:text-sm leading-relaxed">{rule.desc}</p>
                                 </div>
                             </div>
                         </motion.div>
@@ -75,8 +74,8 @@ export default function Rules() {
                     transition={{ delay: 0.6 }}
                     className="mt-12 text-center"
                 >
-                    <a href="/rules" className="text-cyan-400 font-bold hover:text-cyan-300 transition-colors border-b border-cyan-400/30 hover:border-cyan-400 pb-0.5">
-                        Read Full Regulations & Prize Details →
+                    <a href="/rules" className="stardew-btn-gold text-xs px-6 py-3 text-[#24140b] inline-block font-bold">
+                        Read Full Regulations & Model Contract →
                     </a>
                 </motion.div>
             </div>

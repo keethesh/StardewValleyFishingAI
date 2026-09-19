@@ -137,6 +137,28 @@ export default function FishingGameComponent({ fish, modelUrl, width = 200, heig
     const handleDown = () => setControls({ pressing: true });
     const handleUp = () => setControls({ pressing: false });
 
+    // Keyboard Spacebar listener for desktop players
+    useEffect(() => {
+        if (isAI) return;
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                setControls({ pressing: true });
+            }
+        };
+        const onKeyUp = (e: KeyboardEvent) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                setControls({ pressing: false });
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        window.addEventListener('keyup', onKeyUp);
+        return () => {
+            window.removeEventListener('keydown', onKeyDown);
+            window.removeEventListener('keyup', onKeyUp);
+        };
+    }, [isAI]);
     // Drawing
     const draw = (g: FishingGame) => {
         const canvas = canvasRef.current;
@@ -255,32 +277,56 @@ export default function FishingGameComponent({ fish, modelUrl, width = 200, heig
     };
 
     return (
-        <div className="relative inline-block border-4 border-slate-700 rounded-lg overflow-hidden bg-slate-900 shadow-xl">
-            <canvas
-                ref={canvasRef}
-                width={width}
-                height={height}
-                onMouseDown={handleDown}
-                onMouseUp={handleUp}
-                onTouchStart={handleDown}
-                onTouchEnd={handleUp}
-                className="cursor-pointer active:cursor-grabbing touch-none"
-            />
-            {message && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                    <div className={`text-4xl font-bold ${message === 'CAUGHT!' ? 'text-green-400' : 'text-red-500'} animate-bounce shadow-black drop-shadow-lg`}>
-                        {message}
+        <div className="inline-flex flex-col items-center">
+            <div className="relative inline-block stardew-box p-2 shadow-2xl">
+                <canvas
+                    ref={canvasRef}
+                    width={width}
+                    height={height}
+                    onMouseDown={handleDown}
+                    onMouseUp={handleUp}
+                    onTouchStart={handleDown}
+                    onTouchEnd={handleUp}
+                    className="cursor-pointer active:cursor-grabbing touch-none block rounded-sm bg-[#120a06]"
+                />
+                {message && (
+                    <div className="absolute inset-0 m-2 flex items-center justify-center bg-black/60 backdrop-blur-[2px] rounded-sm">
+                        <div className={`text-2xl md:text-3xl font-bold font-[family-name:var(--font-pixel)] ${
+                            message === 'CAUGHT!' ? 'text-[#a3e635]' : 'text-[#f87171]'
+                        } animate-bounce drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)]`}>
+                            {message}
+                        </div>
                     </div>
-                </div>
-            )}
-            {!isAI && !message && (
-                <div className="absolute bottom-4 left-0 right-0 text-center text-white/50 text-sm pointer-events-none">
-                    Hold Click / Tap
-                </div>
-            )}
-            {isAI && (
-                <div className="absolute top-4 right-4 text-xs bg-purple-600 px-2 py-1 rounded text-white font-mono">
-                    AI PILOT
+                )}
+                {!isAI && !message && (
+                    <div className="hidden md:block absolute bottom-4 left-0 right-0 text-center text-amber-100/60 text-xs font-mono pointer-events-none drop-shadow">
+                        Hold Click or Spacebar
+                    </div>
+                )}
+                {isAI && (
+                    <div className="absolute top-4 right-4 text-[10px] font-bold font-[family-name:var(--font-pixel)] bg-[#6b3813] border border-[#b86e33] px-2 py-1 rounded text-amber-200 shadow">
+                        AI PILOT
+                    </div>
+                )}
+            </div>
+
+            {/* Dedicated mobile tap target */}
+            {!isAI && (
+                <div className="w-full mt-3 md:hidden">
+                    <button
+                        type="button"
+                        onMouseDown={handleDown}
+                        onMouseUp={handleUp}
+                        onTouchStart={handleDown}
+                        onTouchEnd={handleUp}
+                        className={`w-full py-3.5 px-4 text-xs font-bold font-[family-name:var(--font-pixel)] uppercase tracking-wider rounded-md select-none touch-none transition-all ${
+                            controls.pressing
+                                ? 'bg-[#c97816] text-[#24140b] translate-y-1 shadow-none'
+                                : 'stardew-btn-gold text-[#24140b]'
+                        }`}
+                    >
+                        {controls.pressing ? '⚡ REELING IN...' : '🎣 HOLD TO REEL'}
+                    </button>
                 </div>
             )}
         </div>

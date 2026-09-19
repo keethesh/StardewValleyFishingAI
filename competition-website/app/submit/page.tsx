@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { Upload, AlertCircle, CheckCircle } from 'lucide-react';
 import { InferenceSession } from 'onnxruntime-web';
+import Navbar from '@/components/Navbar';
+import Footer from '@/components/Footer';
 
 function getErrorMessage(error: unknown, fallback: string) {
     return error instanceof Error ? error.message : fallback;
@@ -160,90 +162,92 @@ export default function SubmitPage() {
     };
 
     return (
-        <main className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-950 via-slate-950 to-black text-slate-200 font-sans p-8 selection:bg-cyan-500 selection:text-white">
+        <main className="min-h-screen bg-[#090e15] text-[#f7f2ea] selection:bg-[#f7bf47] selection:text-[#24140b]">
+            <Navbar />
 
-            {/* Background Decor */}
             <div className="fixed inset-0 pointer-events-none">
-                <div className="absolute top-[-20%] left-[20%] w-[50%] h-[50%] bg-blue-600/10 rounded-full blur-[150px]" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(42,88,140,0.22),_transparent_40%),radial-gradient(circle_at_88%_15%,_rgba(247,191,71,0.12),_transparent_28%),linear-gradient(180deg,_#090e15_0%,_#0e1622_55%,_#070a0f_100%)]" />
             </div>
 
-            <div className="max-w-3xl mx-auto space-y-8 relative z-10">
-                <Link href="/" className="inline-flex items-center gap-2 text-slate-400 transition-colors hover:text-white">
-                    ← Back to Companion Site
+            <div className="max-w-3xl mx-auto space-y-8 relative z-10 px-6 pb-24 pt-28 md:pt-32">
+                <Link href="/" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#f7bf47] hover:text-[#ffdb80] transition-colors">
+                    ← Back to Companion Demo
                 </Link>
 
-                <div className="text-center space-y-2">
-                    <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
+                <div className="text-center space-y-3">
+                    <p className="text-xs font-bold uppercase tracking-[0.32em] text-[#f7bf47]">
+                        Community Challenge
+                    </p>
+                    <h1 className="font-[family-name:var(--font-pixel)] text-3xl sm:text-4xl text-[#fff7e6] drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
                         Submit a Model
                     </h1>
-                    <p className="text-slate-400 text-lg">
-                        Upload your <code className="bg-slate-800 px-2 py-0.5 rounded text-cyan-400">.onnx</code> file if you want to take a shot at the challenge.
+                    <p className="text-[#d8cbba] text-sm sm:text-base max-w-xl mx-auto leading-relaxed">
+                        Drop your trained <code className="bg-[#180e07] border border-[#522a0e] px-2 py-0.5 rounded text-[#f7bf47] font-mono text-xs">.onnx</code> file below to run the official evaluation benchmark.
                     </p>
                 </div>
 
-                <div className="bg-slate-900/50 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl ring-1 ring-white/5">
+                <div className="stardew-box p-6 sm:p-8 shadow-2xl">
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div className="grid md:grid-cols-2 gap-6">
                             <div className="md:col-span-2">
-                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Model Name</label>
+                                <label className="block text-xs font-bold uppercase tracking-wider text-[#e6b978] mb-2 font-mono">Model Name</label>
                                 <input
                                     type="text"
                                     required
                                     value={modelName}
                                     onChange={e => setModelName(e.target.value)}
-                                    className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 outline-none transition-all placeholder:text-slate-600"
+                                    className="w-full bg-[#180e07] border-2 border-[#6b3813] rounded p-3 text-[#fff7e6] focus:border-[#f7bf47] outline-none transition-all placeholder:text-[#6a5441] text-sm"
                                     placeholder="e.g. DeepFisher v1"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Display Name</label>
+                                <label className="block text-xs font-bold uppercase tracking-wider text-[#e6b978] mb-2 font-mono">Display Name</label>
                                 <input
                                     type="text"
                                     required
                                     value={author}
                                     onChange={e => setAuthor(e.target.value)}
-                                    className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 outline-none transition-all placeholder:text-slate-600"
-                                    placeholder="Leaderboard Name"
+                                    className="w-full bg-[#180e07] border-2 border-[#6b3813] rounded p-3 text-[#fff7e6] focus:border-[#f7bf47] outline-none transition-all placeholder:text-[#6a5441] text-sm"
+                                    placeholder="Leaderboard Handle"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Contact (Private)</label>
+                                <label className="block text-xs font-bold uppercase tracking-wider text-[#e6b978] mb-2 font-mono">Contact (Private)</label>
                                 <input
                                     type="text"
                                     required
-                                    className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 outline-none transition-all placeholder:text-slate-600"
-                                    placeholder="Discord ID or Email"
+                                    className="w-full bg-[#180e07] border-2 border-[#6b3813] rounded p-3 text-[#fff7e6] focus:border-[#f7bf47] outline-none transition-all placeholder:text-[#6a5441] text-sm"
+                                    placeholder="Discord ID or Email (for bounty payout)"
                                 />
                             </div>
 
                             <div className="md:col-span-2">
-                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-                                    GitHub URL <span className="text-slate-600 lowercase font-normal">(optional)</span>
+                                <label className="block text-xs font-bold uppercase tracking-wider text-[#e6b978] mb-2 font-mono">
+                                    GitHub / Colab URL <span className="text-[#a89682] lowercase font-normal">(optional)</span>
                                 </label>
                                 <input
                                     type="url"
-                                    className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 outline-none transition-all placeholder:text-slate-600"
+                                    className="w-full bg-[#180e07] border-2 border-[#6b3813] rounded p-3 text-[#fff7e6] focus:border-[#f7bf47] outline-none transition-all placeholder:text-[#6a5441] text-sm"
                                     placeholder="https://github.com/..."
                                 />
                             </div>
 
                             <div className="md:col-span-2">
-                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-                                    Brief Approach <span className="text-slate-600 lowercase font-normal">(optional)</span>
+                                <label className="block text-xs font-bold uppercase tracking-wider text-[#e6b978] mb-2 font-mono">
+                                    Training Strategy <span className="text-[#a89682] lowercase font-normal">(optional)</span>
                                 </label>
                                 <textarea
                                     rows={2}
-                                    className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 outline-none transition-all placeholder:text-slate-600 resize-none"
-                                    placeholder="e.g. PPO with reward shaping, 2M timesteps..."
+                                    className="w-full bg-[#180e07] border-2 border-[#6b3813] rounded p-3 text-[#fff7e6] focus:border-[#f7bf47] outline-none transition-all placeholder:text-[#6a5441] resize-none text-sm"
+                                    placeholder="e.g. Dueling DQN, 5000 episodes, tuned reward shaping..."
                                 />
                             </div>
                         </div>
-
                         <div className="relative group">
-                            <div className={`border-2 border-dashed rounded-xl p-10 text-center transition-all cursor-pointer relative overflow-hidden
-                        ${file ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-white/10 hover:border-cyan-500/50 hover:bg-white/5'}`}>
+                            <div className={`border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer relative overflow-hidden
+                        ${file ? 'border-[#a3e635] bg-[#a3e635]/10' : 'border-[#b86e33] bg-[#180e07] hover:border-[#f7bf47]'}`}>
 
                                 <input
                                     type="file"
@@ -255,20 +259,20 @@ export default function SubmitPage() {
 
                                 <div className="pointer-events-none relative z-10">
                                     {file ? (
-                                        <div className="space-y-2 animate-in fade-in zoom-in duration-300">
-                                            <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                                                <CheckCircle className="w-8 h-8 text-emerald-400" />
+                                        <div className="space-y-2">
+                                            <div className="w-12 h-12 bg-[#a3e635]/20 rounded-full flex items-center justify-center mx-auto mb-2">
+                                                <CheckCircle className="w-6 h-6 text-[#a3e635]" />
                                             </div>
-                                            <p className="text-emerald-300 font-medium text-lg">{file.name}</p>
-                                            <p className="text-slate-500 text-sm">{(file.size / 1024).toFixed(0)} KB • Ready to upload</p>
+                                            <p className="text-[#a3e635] font-bold text-base font-mono">{file.name}</p>
+                                            <p className="text-[#d8cbba] text-xs font-mono">{(file.size / 1024).toFixed(1)} KB (Ready for evaluation)</p>
                                         </div>
                                     ) : (
                                         <div className="space-y-2">
-                                            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                                                <Upload className="w-8 h-8 text-slate-400 group-hover:text-cyan-400 transition-colors" />
+                                            <div className="w-12 h-12 bg-[#2a170e] border border-[#522a0e] rounded-full flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform">
+                                                <Upload className="w-6 h-6 text-[#f7bf47]" />
                                             </div>
-                                            <p className="text-slate-300 font-medium text-lg">Drag & drop your model here</p>
-                                            <p className="text-slate-500 text-sm">or click to browse files</p>
+                                            <p className="text-[#fff7e6] font-bold text-base">Drag & drop your .onnx model here</p>
+                                            <p className="text-[#a89682] text-xs font-mono">or click to browse local files (max 5 MB)</p>
                                         </div>
                                     )}
                                 </div>
@@ -277,7 +281,13 @@ export default function SubmitPage() {
 
                         {/* Verification Status Message */}
                         {verificationStatus !== 'idle' && (
-                            <div className={`p-4 rounded-lg text-sm font-mono border ${verificationStatus === 'valid' ? 'bg-emerald-900/30 border-emerald-500/30 text-emerald-300' : verificationStatus === 'invalid' ? 'bg-red-900/30 border-red-500/30 text-red-300' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
+                            <div className={`p-4 rounded text-xs font-mono border ${
+                                verificationStatus === 'valid'
+                                    ? 'bg-[#a3e635]/15 border-[#a3e635]/40 text-[#a3e635]'
+                                    : verificationStatus === 'invalid'
+                                    ? 'bg-[#f87171]/15 border-[#f87171]/40 text-[#f87171]'
+                                    : 'bg-[#180e07] border-[#522a0e] text-[#d8cbba]'
+                            }`}>
                                 {verificationStatus === 'checking' && <span className="animate-pulse">⏳ </span>}
                                 {verificationMsg}
                             </div>
@@ -286,30 +296,31 @@ export default function SubmitPage() {
                         <button
                             type="submit"
                             disabled={status === 'uploading' || status === 'evaluating' || verificationStatus !== 'valid'}
-                            className={`w-full py-4 rounded-xl font-bold text-lg transition-all shadow-lg relative overflow-hidden group
-                        ${(status === 'idle' && verificationStatus === 'valid') || status === 'error' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:scale-[1.02] text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50'}`}
+                            className={`w-full py-4 text-xs font-bold uppercase tracking-wider rounded font-[family-name:var(--font-pixel)] transition-all ${
+                                (status === 'idle' && verificationStatus === 'valid') || status === 'error'
+                                    ? 'stardew-btn-gold text-[#24140b] cursor-pointer'
+                                    : 'bg-[#2a170e] border border-[#522a0e] text-[#6a5441] cursor-not-allowed opacity-50'
+                            }`}
                         >
-                            <span className="relative z-10 flex items-center justify-center gap-2">
-                                {status === 'idle' && '🚀 Launch Evaluation'}
-                                {status === 'uploading' && 'Uploading...'}
-                                {status === 'evaluating' && 'Running Simulation...'}
-                                {status === 'success' && 'Done!'}
-                                {status === 'error' && 'Retry Submission'}
-                            </span>
-                            {status === 'idle' && verificationStatus === 'valid' && <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />}
+                            {status === 'idle' && '🚀 Launch Official Evaluation'}
+                            {status === 'uploading' && 'Uploading Model...'}
+                            {status === 'evaluating' && 'Running 25-Fish Simulation...'}
+                            {status === 'success' && 'Evaluation Complete!'}
+                            {status === 'error' && 'Retry Submission'}
                         </button>
                     </form>
 
                     {/* Progress during evaluation */}
+                    {/* Progress during evaluation */}
                     {status === 'evaluating' && (
-                        <div className="mt-8 bg-slate-800/50 border border-slate-700 p-6 rounded-xl">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-slate-300 font-medium">Evaluating: {evalProgress.fishName}</span>
-                                <span className="text-cyan-400 font-mono">{evalProgress.current}/{evalProgress.total}</span>
+                        <div className="mt-8 stardew-box p-6 space-y-3">
+                            <div className="flex items-center justify-between text-xs font-bold font-mono">
+                                <span className="text-[#d8cbba]">Simulating: {evalProgress.fishName}</span>
+                                <span className="text-[#f7bf47]">{evalProgress.current}/{evalProgress.total}</span>
                             </div>
-                            <div className="w-full bg-slate-700 rounded-full h-3">
+                            <div className="w-full bg-[#180e07] border border-[#522a0e] rounded-full h-3 overflow-hidden">
                                 <div
-                                    className="bg-gradient-to-r from-cyan-500 to-blue-500 h-3 rounded-full transition-all duration-300"
+                                    className="bg-gradient-to-r from-[#e89c25] to-[#f7bf47] h-full transition-all duration-300"
                                     style={{ width: `${evalProgress.total > 0 ? (evalProgress.current / evalProgress.total) * 100 : 0}%` }}
                                 />
                             </div>
@@ -317,56 +328,60 @@ export default function SubmitPage() {
                     )}
 
                     {status === 'success' && evalResult && (
-                        <div className="mt-8 bg-emerald-900/30 border border-emerald-500/30 p-6 rounded-xl animate-in slide-in-from-bottom-4">
-                            <div className="flex items-center gap-4 mb-4">
-                                <div className="p-3 bg-emerald-500/20 rounded-full">
-                                    <CheckCircle className="text-emerald-400 w-8 h-8" />
-                                </div>
+                        <div className="mt-8 stardew-box p-6 space-y-4 border-2 border-[#a3e635]">
+                            <div className="flex items-center gap-3">
+                                <CheckCircle className="text-[#a3e635] w-7 h-7" />
                                 <div>
-                                    <h4 className="font-bold text-emerald-400 text-lg">Official evaluation complete</h4>
-                                    <span className="text-teal-300 text-xs font-mono">
-                                        All {evalResult.nFish} fish × {evalResult.seedsPerFish}{' '}
-                                        seeds · seed {evalResult.runSeed}
+                                    <h4 className="font-bold text-[#a3e635] font-[family-name:var(--font-pixel)] text-sm">
+                                        Official Evaluation Complete
+                                    </h4>
+                                    <span className="text-[#d8cbba] text-xs font-mono">
+                                        All {evalResult.nFish} fish × {evalResult.seedsPerFish} seeds (runSeed {evalResult.runSeed})
                                     </span>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-3 gap-4 text-center mt-4">
-                                <div className="bg-black/20 p-4 rounded-lg">
-                                    <div className="text-3xl font-bold text-white">{(evalResult.score * 100).toFixed(1)}</div>
-                                    <div className="text-xs text-slate-400 uppercase tracking-wider">Score %</div>
+                            <div className="grid grid-cols-3 gap-3 text-center pt-2">
+                                <div className="stardew-slot p-3">
+                                    <div className="text-2xl font-bold font-[family-name:var(--font-pixel)] text-[#fff7e6]">
+                                        {(evalResult.score * 100).toFixed(1)}
+                                    </div>
+                                    <div className="text-[10px] text-[#a89682] uppercase font-mono mt-1">Weighted Score</div>
                                 </div>
-                                <div className="bg-black/20 p-4 rounded-lg">
-                                    <div className="text-3xl font-bold text-cyan-400">{(evalResult.catchRate * 100).toFixed(0)}%</div>
-                                    <div className="text-xs text-slate-400 uppercase tracking-wider">Catch Rate</div>
+                                <div className="stardew-slot p-3">
+                                    <div className="text-2xl font-bold font-[family-name:var(--font-pixel)] text-[#a3e635]">
+                                        {(evalResult.catchRate * 100).toFixed(0)}%
+                                    </div>
+                                    <div className="text-[10px] text-[#a89682] uppercase font-mono mt-1">Catch Rate</div>
                                 </div>
-                                <div className="bg-black/20 p-4 rounded-lg">
-                                    <div className="text-3xl font-bold text-purple-400">{(evalResult.scoreHard * 100).toFixed(0)}%</div>
-                                    <div className="text-xs text-slate-400 uppercase tracking-wider">Hard Score</div>
+                                <div className="stardew-slot p-3">
+                                    <div className="text-2xl font-bold font-[family-name:var(--font-pixel)] text-[#f7bf47]">
+                                        {(evalResult.scoreHard * 100).toFixed(0)}%
+                                    </div>
+                                    <div className="text-[10px] text-[#a89682] uppercase font-mono mt-1">Hard Fish Rate</div>
                                 </div>
                             </div>
 
-                            <p className="text-xs text-slate-500 mt-4 text-center italic">
-                                Leaderboard score is difficulty-weighted catch rate on every fish
-                                (3 fresh seeds each).
+                            <p className="text-xs text-[#a89682] text-center italic font-mono pt-2">
+                                Your result has been submitted to the challenge board.
                             </p>
                         </div>
                     )}
 
                     {status === 'error' && (
-                        <div className="mt-8 bg-red-900/30 border border-red-500/30 p-6 rounded-xl flex items-center gap-4 animate-in slide-in-from-bottom-4">
-                            <div className="p-3 bg-red-500/20 rounded-full">
-                                <AlertCircle className="text-red-400 w-8 h-8" />
-                            </div>
+                        <div className="mt-8 stardew-box p-6 border-2 border-[#f87171] flex items-center gap-4">
+                            <AlertCircle className="text-[#f87171] w-7 h-7 shrink-0" />
                             <div>
-                                <h4 className="font-bold text-red-400 text-lg">Submission Failed</h4>
-                                <p className="text-red-200/80">{errorMsg}</p>
+                                <h4 className="font-bold text-[#f87171] font-[family-name:var(--font-pixel)] text-sm mb-1">
+                                    Submission Failed
+                                </h4>
+                                <p className="text-[#fca5a5] text-xs leading-relaxed">{errorMsg}</p>
                             </div>
                         </div>
                     )}
                 </div>
             </div>
+            <Footer />
         </main>
     );
 }
-

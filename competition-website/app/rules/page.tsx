@@ -40,9 +40,9 @@ const guideSections = [
                     <li>Max size: 5 MB</li>
                     <li>Target inference budget: ≤ 16ms per step (60 FPS)</li>
                 </ul>
-                <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-4 font-mono text-xs leading-6 text-stone-400">
+                <div className="mt-3 rounded border-2 border-[#522a0e] bg-[#120a06] p-4 font-mono text-xs leading-6 text-[#e6b978]">
                     Observation (8-D): bobber_pos, bobber_vel, bar_pos, bar_vel, bar_height,
-                    (bar_center − bobber_pos), in_bar, distanceFromCatching — all normalised.
+                    (bar_center - bobber_pos), in_bar, distanceFromCatching (all normalised).
                 </div>
                 <p className="text-sm leading-7 text-stone-400">
                     If you use a different training algorithm, that is fine. Just export it so it
@@ -96,38 +96,36 @@ const guideSections = [
 
 export default function RulesPage() {
     return (
-        <main className="min-h-screen bg-slate-950 text-stone-100 selection:bg-amber-300 selection:text-slate-950">
+        <main className="min-h-screen bg-[#090e15] text-[#f7f2ea] selection:bg-[#f7bf47] selection:text-[#24140b]">
             <Navbar />
 
             <div className="fixed inset-0 pointer-events-none">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(45,212,191,0.12),_transparent_36%),radial-gradient(circle_at_88%_15%,_rgba(251,191,36,0.12),_transparent_24%),linear-gradient(180deg,_#071118_0%,_#05070a_52%,_#020304_100%)]" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(42,88,140,0.22),_transparent_40%),radial-gradient(circle_at_88%_15%,_rgba(247,191,71,0.12),_transparent_28%),linear-gradient(180deg,_#090e15_0%,_#0e1622_55%,_#070a0f_100%)]" />
             </div>
 
-            <div className="relative z-10 mx-auto max-w-5xl px-6 pb-20 pt-32">
-                <header className="space-y-6 border-b border-white/10 pb-10">
+            <div className="relative z-10 mx-auto max-w-5xl px-6 pb-24 pt-28 md:pt-32">
+                <header className="space-y-4 border-b border-[#522a0e] pb-10">
                     <motion.p
                         initial={{ opacity: 0, y: 16 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="text-xs font-semibold uppercase tracking-[0.32em] text-amber-200/80"
+                        className="text-xs font-bold uppercase tracking-[0.32em] text-[#f7bf47]"
                     >
-                        Challenge guide
+                        Pelican Town Challenge Guide
                     </motion.p>
                     <motion.h1
                         initial={{ opacity: 0, y: 18 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="max-w-4xl text-4xl leading-tight text-stone-50 sm:text-5xl"
+                        className="max-w-4xl font-[family-name:var(--font-pixel)] text-3xl sm:text-4xl text-[#fff7e6] leading-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
                     >
-                        Everything you need if the demo made you want to train your own.
+                        Official Regulations & Model Contract
                     </motion.h1>
                     <motion.p
                         initial={{ opacity: 0, y: 18 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.05 }}
-                        className="max-w-3xl text-lg leading-8 text-stone-300/85"
+                        className="max-w-3xl text-sm sm:text-base leading-relaxed text-[#d8cbba]"
                     >
-                        The homepage is deliberately lightweight. This page is where the stricter
-                        details live: the ONNX contract, how scoring works, and what counts as a fair
-                        submission.
+                        Everything you need to train your own fishing agent: the 8-D ONNX interface, how official server scoring works, and the fair-play guardrails to claim the bounty.
                     </motion.p>
                 </header>
 
@@ -138,41 +136,39 @@ export default function RulesPage() {
                             initial={{ opacity: 0, y: 18 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.08 * index }}
-                            className="rounded-[28px] border border-white/10 bg-stone-950/50 p-7 shadow-[0_24px_80px_rgba(0,0,0,0.28)]"
+                            className="stardew-box p-6 sm:p-8"
                         >
-                            <h2 className={`border-l-4 ${section.accent} pl-4 text-2xl font-semibold text-stone-100`}>
+                            <h2 className="font-[family-name:var(--font-pixel)] text-xl sm:text-2xl text-[#f7bf47] mb-4 drop-shadow">
                                 {section.title}
                             </h2>
-                            <div className="mt-5 space-y-4">{section.body}</div>
+                            <div className="space-y-4 text-sm leading-relaxed text-[#d8cbba]">{section.body}</div>
                         </motion.article>
                     ))}
                 </section>
 
-                <section className="mt-12 rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(251,191,36,0.1),rgba(13,148,136,0.08)_50%,rgba(3,7,18,0.45))] p-8">
+                <section className="mt-12 stardew-box p-8 bg-gradient-to-r from-[#2a170e] via-[#331c11] to-[#24140b]">
                     <div className="space-y-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-200/80">
-                            Ready to try
+                        <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#f7bf47] font-mono">
+                            Ready to Take the Challenge?
                         </p>
-                        <h2 className="text-3xl leading-tight text-stone-50">
-                            If your model clears the contract, send it through the submission flow.
+                        <h2 className="font-[family-name:var(--font-pixel)] text-2xl sm:text-3xl text-[#fff7e6] leading-tight">
+                            Train your agent and test it against the community.
                         </h2>
-                        <p className="max-w-2xl text-base leading-7 text-stone-300/90">
-                            You do not need a huge production pipeline here. The bar is simple: train
-                            something solid, export it cleanly, and see whether it can outfish the
-                            model from the video.
+                        <p className="max-w-2xl text-sm leading-relaxed text-[#d8cbba]">
+                            You do not need a cluster of GPUs. Train for 15 minutes in our free Google Colab, export the 56 KB model, and see if your agent can outfish Episode 3500.
                         </p>
-                        <div className="flex flex-wrap gap-3 pt-2">
+                        <div className="flex flex-wrap gap-4 pt-3">
                             <Link
                                 href="/submit"
-                                className="rounded-full bg-amber-300 px-6 py-3 text-sm font-semibold text-slate-950 transition-transform hover:-translate-y-0.5"
+                                className="stardew-btn-gold text-xs px-6 py-3 text-[#24140b] font-bold"
                             >
-                                Submit a Model
+                                Submit Your Model (.onnx)
                             </Link>
                             <Link
                                 href="/"
-                                className="rounded-full border border-white/15 px-6 py-3 text-sm font-semibold text-stone-100 transition-colors hover:border-white/35 hover:bg-white/6"
+                                className="stardew-btn-wood text-xs px-6 py-3 text-[#fff7e6]"
                             >
-                                Back to the Demo
+                                ← Back to Companion Demo
                             </Link>
                         </div>
                     </div>

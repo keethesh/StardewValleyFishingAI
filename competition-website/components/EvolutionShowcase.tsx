@@ -324,7 +324,7 @@ export default function EvolutionShowcase() {
   return (
     <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
       <div className="space-y-6">
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           {EVOLUTION_STAGES.map((s) => {
             const active = s.id === stage.id;
             return (
@@ -336,34 +336,40 @@ export default function EvolutionShowcase() {
                   setScrubEpisode(s.episode);
                   setMode('live');
                 }}
-                className={`rounded-sm border px-3 py-2 text-left text-sm transition ${
+                className={`p-3 text-left transition-all rounded ${
                   active
-                    ? 'border-amber-300/80 bg-amber-300/15 text-amber-100'
-                    : 'border-white/10 bg-white/5 text-stone-300 hover:border-white/25'
+                    ? 'stardew-btn-gold text-[#24140b]'
+                    : 'stardew-slot text-[#d8cbba] hover:text-[#fff7e6]'
                 }`}
               >
-                <div className="font-medium">{s.name}</div>
-                <div className="text-xs text-stone-400">ep {s.episode}</div>
+                <div className="font-bold text-xs truncate">{s.name}</div>
+                <div className={`text-[10px] font-mono mt-0.5 ${active ? 'text-[#5a330e]' : 'text-[#a89682]'}`}>
+                  Episode {s.episode}
+                </div>
               </button>
             );
           })}
         </div>
 
-        <div className="space-y-3 border-l border-amber-300/40 pl-4">
-          <p className="text-xs uppercase tracking-[0.28em] text-amber-200/70">
+        <div className="stardew-box p-5 space-y-3">
+          <p className="text-xs font-bold font-mono uppercase tracking-[0.28em] text-[#f7bf47]">
             {stage.rangeLabel}
           </p>
-          <h2 className="font-[family-name:var(--font-pixel)] text-2xl text-stone-50 md:text-3xl">
+          <h2 className="font-[family-name:var(--font-pixel)] text-xl sm:text-2xl text-[#fff7e6] drop-shadow">
             {stage.name}
           </h2>
-          <p className="max-w-xl text-stone-300 leading-relaxed">{stage.insight}</p>
-          <p className="text-sm text-teal-200/80">Unlocks: {stage.unlocks}</p>
+          <p className="text-[#d8cbba] leading-relaxed text-sm">{stage.insight}</p>
+          <div className="pt-2 border-t border-[#522a0e] flex items-center gap-2">
+            <span className="text-xs font-bold text-[#f7bf47] uppercase font-mono">Unlocks:</span>
+            <span className="text-xs text-[#a3e635] font-semibold">{stage.unlocks}</span>
+          </div>
         </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs text-stone-400">
-            <span>Training timeline</span>
-            <span>Episode {scrubEpisode}</span>
+        <div className="stardew-box p-5 space-y-3">
+          <div className="flex items-center justify-between text-xs font-bold font-mono text-[#e6b978]">
+            <span className="uppercase tracking-wider">Training Scrubber</span>
+            <span className="bg-[#180e07] border border-[#522a0e] px-2 py-0.5 rounded text-[#f7bf47]">
+              Episode {scrubEpisode} / {maxEp}
+            </span>
           </div>
           <input
             type="range"
@@ -372,15 +378,15 @@ export default function EvolutionShowcase() {
             step={20}
             value={scrubEpisode}
             onChange={(e) => setScrubEpisode(Number(e.target.value))}
-            className="w-full accent-amber-300"
+            className="w-full accent-[#f7bf47] cursor-pointer"
           />
-          <div className="grid h-16 grid-cols-[1fr] overflow-hidden rounded-sm border border-white/10 bg-slate-950/80">
+          <div className="h-16 overflow-hidden rounded border-2 border-[#522a0e] bg-[#120a06]">
             <svg viewBox="0 0 500 64" className="h-full w-full" preserveAspectRatio="none">
               <polyline
                 fill="none"
-                stroke="rgba(45,212,191,0.85)"
+                stroke="#38bdf8"
                 strokeWidth="2"
-                points={TRAINING_CURVE.map((p, i) => {
+                points={TRAINING_CURVE.map((p) => {
                   const x = (p.episode / maxEp) * 500;
                   const y = 56 - p.tapHz * 1.6;
                   return `${x},${y}`;
@@ -388,7 +394,7 @@ export default function EvolutionShowcase() {
               />
               <polyline
                 fill="none"
-                stroke="rgba(251,191,36,0.75)"
+                stroke="#f7bf47"
                 strokeWidth="2"
                 points={TRAINING_CURVE.map((p) => {
                   const x = (p.episode / maxEp) * 500;
@@ -401,39 +407,44 @@ export default function EvolutionShowcase() {
                 x2={(scrubEpisode / maxEp) * 500}
                 y1="4"
                 y2="60"
-                stroke="rgba(255,255,255,0.45)"
-                strokeWidth="1"
+                stroke="#fff7e6"
+                strokeWidth="2"
               />
             </svg>
           </div>
-          <div className="flex gap-4 text-xs text-stone-500">
-            <span className="text-teal-300/80">● tap Hz</span>
-            <span className="text-amber-300/80">● centering quality</span>
+          <div className="flex gap-4 text-xs font-mono">
+            <span className="text-[#38bdf8]">● Tap Rate (Hz)</span>
+            <span className="text-[#f7bf47]">● Centering Quality</span>
           </div>
         </div>
 
-        <div className="grid grid-cols-5 gap-2 text-center text-xs">
-          {(['sinker', 'dart', 'smooth', 'mixed', 'floater'] as const).map((b) => (
-            <div key={b} className="border border-white/10 bg-white/[0.03] px-1 py-2">
-              <div className="uppercase tracking-wider text-stone-500">{b}</div>
-              <div className="mt-1 text-base text-stone-100">{pct(stage.rates[b])}</div>
-            </div>
-          ))}
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-[#e6b978] mb-2 font-mono">
+            Catch Rate by Fish Behavior
+          </p>
+          <div className="grid grid-cols-5 gap-2 text-center text-xs">
+            {(['sinker', 'dart', 'smooth', 'mixed', 'floater'] as const).map((b) => (
+              <div key={b} className="stardew-slot py-2 px-1">
+                <div className="uppercase tracking-wider text-[10px] text-[#a89682] font-mono">{b}</div>
+                <div className="mt-1 font-bold font-[family-name:var(--font-pixel)] text-xs text-[#fff7e6]">{pct(stage.rates[b])}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="inline-flex rounded-sm border border-white/10 p-0.5 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 stardew-box p-3">
+          <div className="inline-flex rounded p-0.5 bg-[#180e07] border border-[#522a0e] text-xs">
             <button
               type="button"
               onClick={() => {
                 setMode('live');
                 gameRef.current = new FishingGame(carp);
               }}
-              className={`px-3 py-1.5 ${mode === 'live' ? 'bg-teal-400/20 text-teal-100' : 'text-stone-400'}`}
+              className={`px-3 py-1.5 font-bold rounded transition-all ${mode === 'live' ? 'stardew-btn-gold text-[#24140b]' : 'text-[#d8cbba]'}`}
             >
-              Live model
+              Live WASM
             </button>
             <button
               type="button"
@@ -441,70 +452,71 @@ export default function EvolutionShowcase() {
                 setMode('trace');
                 setTraceFrame(0);
               }}
-              className={`px-3 py-1.5 ${mode === 'trace' ? 'bg-teal-400/20 text-teal-100' : 'text-stone-400'}`}
+              className={`px-3 py-1.5 font-bold rounded transition-all ${mode === 'trace' ? 'stardew-btn-gold text-[#24140b]' : 'text-[#d8cbba]'}`}
             >
-              Recorded trace
+              Trace Replay
             </button>
           </div>
           <button
             type="button"
             onClick={() => setPlaying((p) => !p)}
-            className="rounded-sm border border-white/15 px-3 py-1.5 text-sm text-stone-200"
+            className="stardew-btn-wood text-xs px-4 py-1.5 text-[#fff7e6]"
           >
-            {playing ? 'Pause' : 'Play'}
+            {playing ? '⏸ Pause' : '▶ Play'}
           </button>
-          <span className="text-xs text-stone-500">{status}</span>
+          <span className="text-xs font-mono text-[#a89682]">{status}</span>
         </div>
 
-        <div className="flex flex-col gap-4 sm:flex-row">
-          <canvas
-            ref={canvasRef}
-            width={220}
-            height={620}
-            className="mx-auto border border-white/10 bg-slate-950 shadow-[0_0_40px_rgba(0,0,0,0.45)]"
-          />
+        <div className="flex flex-col gap-6 sm:flex-row items-center sm:items-start">
+          <div className="stardew-box p-2 shadow-2xl">
+            <canvas
+              ref={canvasRef}
+              width={220}
+              height={620}
+              className="block rounded-sm bg-[#120a06]"
+            />
+          </div>
 
-          <div className="flex min-w-0 flex-1 flex-col gap-4">
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <Metric label="Tap frequency" value={`${telemetry.tapHz.toFixed(0)} Hz`} />
+          <div className="flex min-w-0 flex-1 flex-col gap-4 w-full">
+            <div className="grid grid-cols-2 gap-3">
+              <Metric label="Tap Frequency" value={`${telemetry.tapHz.toFixed(0)} Hz`} highlight />
               <Metric
-                label="ΔQ (press−release)"
-                value={mode === 'live' ? telemetry.deltaQ.toFixed(3) : 'N/A'}
+                label="Delta Q (Confidence)"
+                value={mode === 'live' ? telemetry.deltaQ.toFixed(3) : 'Replay'}
               />
-              <Metric label="Catch meter" value={`${(telemetry.progress * 100).toFixed(0)}%`} />
-              <Metric label="In bar" value={telemetry.inBar ? 'yes' : 'no'} />
+              <Metric label="Catch Progress" value={`${(telemetry.progress * 100).toFixed(0)}%`} />
+              <Metric label="Fish in Bar" value={telemetry.inBar ? 'IN BAR' : 'OUTSIDE'} active={telemetry.inBar} />
             </div>
 
-            <div>
-              <div className="mb-1 text-xs uppercase tracking-wider text-stone-500">
-                Thrust trace
+            <div className="stardew-box p-4 space-y-2">
+              <div className="text-xs font-bold uppercase tracking-wider text-[#e6b978] font-mono">
+                Instantaneous Thrust History
               </div>
-              <div className="flex h-14 items-end gap-px overflow-hidden border border-white/10 bg-slate-950/90 px-1 py-1">
+              <div className="flex h-14 items-end gap-px overflow-hidden rounded border border-[#522a0e] bg-[#120a06] p-1">
                 {Array.from({ length: TRACE_WINDOW }).map((_, i) => {
                   const v = thrustHistory[i] ?? 0;
                   return (
                     <div
                       key={i}
-                      className="w-full"
+                      className="w-full transition-all"
                       style={{
-                        height: v ? '100%' : '18%',
-                        background: v ? 'rgba(45,212,191,0.85)' : 'rgba(148,163,184,0.25)',
+                        height: v ? '100%' : '15%',
+                        background: v ? '#f7bf47' : '#331d0f',
                       }}
                     />
                   );
                 })}
               </div>
-              <p className="mt-1 text-xs text-stone-500">
-                Action {telemetry.action === 1 ? 'PRESS' : 'release'} · checkpoint ep{' '}
-                {stage.episode} · tap@eval {stage.tapHz.toFixed(1)} Hz
+              <p className="text-xs font-mono text-[#a89682]">
+                Action: <span className="font-bold text-[#fff7e6]">{telemetry.action === 1 ? 'PRESS (THRUST)' : 'RELEASE'}</span> · Stage: ep {stage.episode}
               </p>
             </div>
 
             {trace && mode === 'trace' && (
-              <p className="text-xs text-stone-400">
-                Replay: {trace.trace.fish} (seed {trace.trace.seed}) :{' '}
-                {trace.trace.success ? 'caught' : 'lost'} ({trace.trace.length} frames)
-              </p>
+              <div className="stardew-slot p-3 text-xs font-mono text-[#d8cbba]">
+                Replay: <span className="text-[#f7bf47] font-bold">{trace.trace.fish}</span> (seed {trace.trace.seed}) :{' '}
+                <span className={trace.trace.success ? 'text-[#a3e635]' : 'text-[#f87171]'}>{trace.trace.success ? 'CAUGHT' : 'LOST'}</span> ({trace.trace.length} frames)
+              </div>
             )}
           </div>
         </div>
@@ -513,11 +525,16 @@ export default function EvolutionShowcase() {
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ label, value, highlight = false, active = false }: { label: string; value: string; highlight?: boolean; active?: boolean }) {
   return (
-    <div className="border border-white/10 bg-white/[0.03] px-3 py-2">
-      <div className="text-[11px] uppercase tracking-wider text-stone-500">{label}</div>
-      <div className="mt-1 font-mono text-lg text-stone-100">{value}</div>
+    <div className="stardew-slot p-3">
+      <div className="text-[10px] uppercase font-mono tracking-wider text-[#a89682]">{label}</div>
+      <div className={`mt-1 font-[family-name:var(--font-pixel)] text-sm ${
+        highlight ? 'text-[#f7bf47]' : active ? 'text-[#a3e635]' : 'text-[#fff7e6]'
+      }`}>
+        {value}
+      </div>
     </div>
   );
 }
+
