@@ -48,13 +48,15 @@ Traces: `public/data/evolution/episode_*.json`
 
 | Mode | Where | What |
 |---|---|---|
-| Preview | Browser (`lib/evaluate-model.ts`) | Fixed fish list + fixed seeds — “does it load?” |
-| **Official** | `POST /api/evaluate` | **All fish × 3 seeds**, fresh `runSeed` each submit. Score = difficulty-weighted catch rate. |
+| Preview | Browser (`lib/evaluate-model.ts`) | Fixed fish list + fixed seeds — verify architecture |
+| **Official** | Browser (`lib/simulation.ts`) | **All fish × 3 seeds**, fresh `runSeed` each submit. Evaluated client-side via WebAssembly in ~1.5s, then saved to Cloudflare KV. |
 
 Leaderboard stores the official score (0–1). Training-repo `eval_score` uses the same formula with **public fixed seeds** — it is not the contest metric.
 
-## Env / deploy
+## Deploy on Cloudflare Workers
 
-Optional Redis/KV for leaderboard persistence (see `lib/redis.ts`, `lib/supabase.ts`). Without it, the API falls back to a static baseline entry.
+The site deploys to **Cloudflare Workers with Workers Static Assets** and native **Cloudflare KV**:
 
-Deploy on Vercel; note official eval can take tens of seconds (full catalog × 3) — `maxDuration` is set on the evaluate route.
+```bash
+npm run deploy
+```
