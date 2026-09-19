@@ -1073,22 +1073,37 @@ if __name__ == "__main__":
 
     train_new_model = True
     skip_evaluation = True
-    # Override via CLI: python main.py --episodes 200
+    # Override via CLI: python main.py --episodes 5000 --save-every 500 --checkpoint <path> --eps-start 0.2
     n_episodes = 10_000
     if "--episodes" in sys.argv:
         idx = sys.argv.index("--episodes")
         n_episodes = int(sys.argv[idx + 1])
 
+    checkpoint_path = None
+    if "--checkpoint" in sys.argv:
+        idx = sys.argv.index("--checkpoint")
+        checkpoint_path = sys.argv[idx + 1]
+        agent.load(checkpoint_path)
+
+    eps_start = 0.2 if checkpoint_path else 1.0
+    if "--eps-start" in sys.argv:
+        idx = sys.argv.index("--eps-start")
+        eps_start = float(sys.argv[idx + 1])
+
+    save_every = 500
+    if "--save-every" in sys.argv:
+        idx = sys.argv.index("--save-every")
+        save_every = int(sys.argv[idx + 1])
+    elif n_episodes < save_every:
+        save_every = max(10, n_episodes // 2)
+
     if train_new_model:
-        save_every = 500
-        if n_episodes < save_every:
-            save_every = max(10, n_episodes // 2)
         scores = train_dqn_vectorized(
             env_vec=env_vec,
             agent=agent,
             n_episodes=n_episodes,
             max_t=2000,
-            eps_start=1.0,
+            eps_start=eps_start,
             eps_end=0.02,
             eps_decay=0.9995,
             save_every=save_every,

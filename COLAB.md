@@ -1,108 +1,61 @@
-# Running the C51 Training on Google Colab
+# Running 8-D Dueling DQN Training on Google Colab
 
-The C51 Dueling architecture (256-256-128-64 + multi-head attention + 51
-distributional atoms + NoisyNet + AdamW + grad accumulation) is **far too
-heavy for CPU training**. Measured throughput:
+The official competition architecture is an **8-D Dueling Double DQN** (~13.7k parameters, ~56 KB ONNX).
+It runs fast on free Google Colab T4 GPUs and can even train on CPU.
 
-| Configuration | Per-episode wall time | 12,000-episode total |
+| Configuration | Per-episode wall time | 5,000-episode total |
 |---|---|---|
-| CPU (8 threads, this machine) | ~25-45 seconds | **~26 hours** |
-| **Colab T4 GPU (free tier)** | **~1-2 seconds** | **~2-3 hours** |
-| Colab A100 GPU (Pro) | ~0.3 seconds | ~30-45 minutes |
+| CPU (8 threads) | ~0.5 - 1.0 second | ~45 - 60 minutes |
+| **Colab T4 GPU (free tier)** | **~0.15 - 0.25 second** | **~15 - 20 minutes** |
 
-Use the provided `colab_training.ipynb` to run the full 12,000-episode
-training. Everything below is what that notebook does, in case you want
-to replicate it manually or run on a different GPU host.
+Use the provided `colab_training.ipynb` to train the model, export it to `.onnx`, and download it directly for submission.
+
+---
 
 ## Quick start (Colab)
 
-1. Open `colab_training.ipynb` in GitHub
-2. Click "Open in Colab" badge
-3. **Runtime → Change runtime type → T4 GPU** (this is critical — without
-   it, training takes days)
-4. Run all cells in order
-5. The last cell zips and downloads all checkpoints + logs
+1. Open `colab_training.ipynb` in GitHub / Google Colab.
+2. **Runtime → Change runtime type → T4 GPU** (or CPU if GPU limits are reached).
+3. Run all cells in order:
+   - **Cell 1**: Clones the repo (`master` branch) and installs dependencies.
+   - **Cell 2**: Verifies the GPU and the 8-D model architecture contract.
+   - **Cell 3**: (Optional) Mounts Google Drive so checkpoints survive disconnections.
+   - **Cell 4**: Trains the model via `python main.py --episodes 5000 --save-every 500`.
+   - **Cell 5**: Exports the best checkpoint to `my_model.onnx`, verifies the ONNX graph against PyTorch, and downloads it.
+4. Drag and drop `my_model.onnx` into the competition website (`/submit` or `/play`)!
+
+---
 
 ## What each cell does
 
-**Cell 1 — Setup.** Clones the repo, checks out the `model-upgrade-v2`
-branch (which has the C51 architecture), installs deps.
+**Cell 1 — Setup.** Clones `master`, installs `torch`, `numpy`, `matplotlib`, `onnx`, `onnxruntime`, and `pygame`.
 
-**Cell 2 — Verify GPU.** Confirms CUDA is available, imports the model
-classes, prints parameter count (~414K for the C51 net).
+**Cell 2 — Verify Architecture.** Confirms CUDA availability and checks that:
+- `OBS_DIM == 8` in `environment.py`
+- `DQNAgent` and `DuelingDQN` match the ~13.7k parameter spec (~56 KB float32 ONNX).
 
-**Cell 3 — (Optional) Mount Drive.** If you toggle `MOUNT_DRIVE=True`,
-checkpoints save to `/content/drive/MyDrive/stardew-fishing-models` and
-survive Colab disconnects.
+**Cell 3 — (Optional) Mount Drive.** Saves checkpoints to `/content/drive/MyDrive/stardew-fishing-models` so they survive browser refreshes or runtime restarts.
 
-**Cell 4 — Train.** Runs `python main.py` with `train_new_model=True`.
-The script will:
-- Train for up to 12,000 episodes with early stop at 98% success
-- Save checkpoints every 500 episodes to `models/checkpoints/`
-- Log metrics to `training_logs/training_metrics_<timestamp>.csv`
-- Print progress every 100 episodes
+**Cell 4 — Train.** Runs `python main.py --episodes {NUM_EPISODES} --save-every {SAVE_EVERY}` on 4 parallel vectorized environments.
+- Logs evolution JSON artefacts and metrics CSVs.
+- Progress prints every 100 episodes.
 
-**Cell 5 — Download.** Bundles the latest checkpoint, metrics CSV, and
-milestone log into a zip and downloads it.
+**Cell 5 — Export to ONNX & Download.**
+- Locates the latest `.pth` checkpoint.
+- Runs `python export_onnx.py <ckpt> --output my_model.onnx`.
+- Verifies graph tolerance (`atol=1e-5`).
+- Automatically triggers a browser download of `my_model.onnx` and latest training logs.
 
-**Cell 6 — (Optional) Resume.** If you disconnected mid-training, upload
-your last checkpoint and the script will continue from there.
+**Cell 6 — (Optional) Resume / Fine-Tune.** Allows uploading a `.pth` file and running additional training:
+`python main.py --checkpoint <uploaded.pth> --episodes 2000 --eps-start 0.2`.
 
-## Expected training trajectory
+---
 
-Based on the proven Dueling DQN runs (2025-10-02, which used the same
-24D state and similar architecture):
+## Model Contract for Competition
 
-| Episode | Expected win rate | Notes |
-|---|---|---|
-| 1-50 | 0-10% | Epsilon 0.20 → ~0.18 (cosine decay), exploration-heavy |
-| 100 | 30-50% | Easiest fish (difficulty ≤ 40) starting to be caught reliably |
-| 300 | 50-70% | Easy fish mastered, medium unlocked |
-| 500 | 70-85% | First saved checkpoint — should already be useful |
-| 1000 | 85-95% | Medium fish mastered, hard unlocked |
-| 2000+ | 95-99% | Convergence; early-stop may fire at 3 consecutive 98% eval rounds |
-| 12000 | 95-99% | Final, or early-stopped earlier |
-
-**If win rate is < 30% by episode 100**, something is wrong. Common causes:
-- Forgot to switch to GPU runtime
-- Training resumed from a broken checkpoint (start fresh)
-- Random seed in environment was changed (don't change it)
-
-## Why the architecture needs a GPU
-
-The C51 model:
-- Forward pass through 4 hidden layers + multi-head attention: ~5M FLOPs
-- 51 distributional atoms × 2 actions = 102 output values
-- N-step returns with n=3, plus prioritized replay
-- Gradient accumulation (2 steps) and AdamW (extra state per param)
-- 4 parallel envs stepping in lockstep, each contributing to the batch
-
-On CPU (8 threads), the bottleneck is the matrix multiplies on the
-attention block and the C51 head. On a T4 GPU, these run 10-20x faster
-because the entire batch fits in VRAM and runs as a single fused kernel.
-
-If you must train on CPU (e.g. no GPU access), use the smaller config
-in `sanity_check_cpu.py` (hidden=[128,128,64], no attention, batch=64,
-no grad accumulation) — gets ~1 sec/episode on CPU but is weaker
-architecturally.
-
-## Sanity check before committing to a long run
-
-Before launching the full 12k episodes, run `sanity_check_cpu.py` to
-verify the 3 critical fixes are in place:
-
-```
-python sanity_check_cpu.py
-```
-
-This takes ~60 seconds and confirms:
-1. `state[19]` (predicted fish position) carries real signal
-   (was dead due to a double-division bug, std ≈ 0)
-2. The observation buffer is not shared between state and next_state
-   (was a single mutable array, breaking TD learning)
-3. Epsilon starts at 0.20 (was 0.05, 4x less exploration)
-4. The C51 loss is finite and has variance (network is producing output)
-5. The vectorized training loop runs end-to-end without NaN
-
-If any of these fail, fix the issue before launching on Colab — a
-12,000-episode run that crashes at episode 100 wastes 30+ minutes of GPU time.
+The competition evaluator on the website expects:
+- **Format:** `.onnx`
+- **Input:** `state` with shape `[1, 8]` (`float32`)
+- **Output:** `q_values` with shape `[1, 2]` (`float32`)
+- **Max File Size:** ≤ 5 MB (baseline model is ~56.8 KB)
+- **Target Latency:** ≤ 16 ms / step (60 FPS)
