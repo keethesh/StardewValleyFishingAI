@@ -38,10 +38,11 @@ export default function Footer() {
                     >
                         Starter Repo
                     </a>
-                    <Link href="/play" className="transition-colors hover:text-[#f6b535]">Play Live</Link>
+                    <Link href="/play" className="transition-colors hover:text-[#f6b535]">Play</Link>
                     <Link href="/evolution" className="transition-colors hover:text-[#f6b535]">Evolution</Link>
-                    <Link href="/submit" className="transition-colors hover:text-[#f6b535]">Submit Model</Link>
-                    <Link href="/rules" className="transition-colors hover:text-[#f6b535]">Regulations</Link>
+                    <Link href="/submit" className="transition-colors hover:text-[#f6b535]">Compete</Link>
+                    <Link href="/rules" className="transition-colors hover:text-[#f6b535]">Rules</Link>
+                    <Link href="/#leaderboard" className="transition-colors hover:text-[#f6b535]">Leaderboard</Link>
                 </div>
             </div>
         </footer>

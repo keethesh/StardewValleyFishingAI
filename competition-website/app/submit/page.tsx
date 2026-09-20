@@ -172,6 +172,14 @@ export default function SubmitPage() {
                     <p className="text-[#d8cbba] text-sm sm:text-base max-w-xl mx-auto leading-relaxed">
                         Drop your trained <code className="bg-[#180e07] border border-[#522a0e] px-2 py-0.5 rounded text-[#f7bf47] font-mono text-xs">.onnx</code> file below to run the official evaluation benchmark.
                     </p>
+                    <p className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-[#c4b5a3]">
+                        <Link href="/rules" className="font-bold uppercase tracking-wider text-[#f7bf47] hover:text-[#ffdb80] transition-colors">
+                            Challenge rules
+                        </Link>
+                        <Link href="/#leaderboard" className="font-bold uppercase tracking-wider text-[#f7bf47] hover:text-[#ffdb80] transition-colors">
+                            View leaderboard
+                        </Link>
+                    </p>
                 </div>
 
                 <div className="stardew-box p-6 sm:p-8 shadow-2xl">
